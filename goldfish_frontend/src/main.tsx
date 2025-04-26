@@ -9,6 +9,8 @@ import {
   createNetworkConfig,
 } from "@mysten/dapp-kit";
 import { getFullnodeUrl } from "@mysten/sui/client";
+import { Toaster } from "sonner";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Configure connection to Sui Devnet
 const { networkConfig } = createNetworkConfig({
@@ -17,15 +19,19 @@ const { networkConfig } = createNetworkConfig({
   // testnet: { url: getFullnodeUrl('testnet') },
   // mainnet: { url: getFullnodeUrl('mainnet') },
 });
+const queryClient = new QueryClient();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <SuiClientProvider networks={networkConfig} defaultNetwork="devnet">
-      <WalletProvider autoConnect={false}>
-        {" "}
-        {/* Set autoConnect={true} if desired */}
-        <App />
-      </WalletProvider>
-    </SuiClientProvider>
+    <Toaster />
+    <QueryClientProvider client={queryClient}>
+      <SuiClientProvider networks={networkConfig} defaultNetwork="devnet">
+        <WalletProvider autoConnect={false}>
+          {" "}
+          {/* Set autoConnect={true} if desired */}
+          <App />
+        </WalletProvider>
+      </SuiClientProvider>
+    </QueryClientProvider>
   </StrictMode>,
 );
