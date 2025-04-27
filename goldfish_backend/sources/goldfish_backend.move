@@ -3,7 +3,7 @@
 module goldfish_backend::goldfish_backend;
 
 use sui::table::{Self, Table};
-use sui::event; // Optional: For emitting events
+// use sui::event; // Optional: For emitting events
 
 /// The main shared object holding the registry of file IDs per user.
 public struct FileRegistry has key {
@@ -24,17 +24,17 @@ const EUserNotFound: u64 = 3; // Optional, depending on remove logic
 
 // --- Events (Optional but Recommended) ---
 
-/// Event emitted when a file ID is added for a user.
-public struct FileIdAdded has copy, drop {
-    user: address,
-    file_id: ID
-}
+// /// Event emitted when a file ID is added for a user.
+// public struct FileIdAdded has copy, drop {
+//     user: address,
+//     file_id: ID
+// }
 
-/// Event emitted when a file ID is removed for a user.
-public struct FileIdRemoved has copy, drop {
-    user: address,
-    file_id: ID
-}
+// /// Event emitted when a file ID is removed for a user.
+// public struct FileIdRemoved has copy, drop {
+//     user: address,
+//     file_id: ID
+// }
 
 
 // --- Initialization ---
@@ -70,7 +70,7 @@ public entry fun add_file_id(
         vector::push_back(user_files_vec, file_id);
     } else {
         // First time user is adding a file ID
-        let new_vec = vector::empty<ID>();
+        let mut new_vec = vector::empty<ID>();
         vector::push_back(&mut new_vec, file_id); // Need &mut even for new vector
         table::add(&mut registry.user_files, sender, new_vec);
     }
@@ -100,7 +100,7 @@ public entry fun remove_file_id(
     assert!(found, EFileIdNotFound);
 
     // Remove the file ID by its index
-    let removed_id = vector::remove(user_files_vec, index);
+    let _removed_id = vector::remove(user_files_vec, index);
 
     // Optional: Clean up - if vector is now empty, remove the user entry from the table
     if (vector::is_empty(user_files_vec)) {
@@ -113,9 +113,9 @@ public entry fun remove_file_id(
 
 // --- View Function (Read-Only) ---
 
+// #[view]
 /// Retrieves the list of file IDs for a given user address.
 /// Returns an empty vector if the user has no stored file IDs.
-#[view]
 public fun get_file_ids(registry: &FileRegistry, user_address: address): vector<ID> {
     if (registry.user_files.contains(user_address)) {
         // Return a copy of the vector
@@ -126,20 +126,36 @@ public fun get_file_ids(registry: &FileRegistry, user_address: address): vector<
     }
 }
 
-    /// Retrieves a specific file ID for a user by index. Useful for pagination UIs.
-    /// Returns `option::none<ID>()` if the index is out of bounds or user doesn't exist.
-    #[view]
-    public fun get_file_id_by_index(registry: &FileRegistry, user_address: address, index: u64): option::Option<ID> {
+// #[view]
+/// Retrieves a specific file ID for a user by index. Useful for pagination UIs.
+/// Returns `option::none<ID>()` if the index is out of bounds or user doesn't exist.
+public fun get_file_id_by_index(registry: &FileRegistry, user_address: address, index: u64): Option<ID> {
     if (registry.user_files.contains(user_address)) {
+        // Borrow the vector immutably since we only need to read
         let user_files_vec = registry.user_files.borrow(user_address);
-        vector::borrow_opt(user_files_vec, index) // Borrows element at index if exists, else None
+        let len = vector::length(user_files_vec);
+
+        // Explicitly check if the index is within the valid range [0, len-1]
+        if (index < len) {
+            // Index is valid. Borrow the element using the standard `vector::borrow`.
+            // Since ID has the `copy` ability, we dereference `*` the immutable reference `&ID`
+            // returned by `borrow` to get a copy of the ID value itself.
+            // Then wrap it in `option::some`.
+            option::some(*vector::borrow(user_files_vec, index))
+        } else {
+            // Index is out of bounds (index >= len)
+            option::none<ID>()
+        }
     } else {
+        // User address not found in the table
         option::none<ID>()
     }
 }
 
+
+
+// #[view]
 /// Gets the total count of file IDs stored for a specific user.
-#[view]
 public fun get_file_count(registry: &FileRegistry, user_address: address): u64 {
     if (registry.user_files.contains(user_address)) {
         vector::length(registry.user_files.borrow(user_address))
