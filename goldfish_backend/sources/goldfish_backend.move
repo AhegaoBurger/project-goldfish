@@ -76,7 +76,7 @@ public entry fun add_file_id(
     }
 
     // Optional: Emit an event
-    event::emit(FileIdAdded { user: sender, file_id });
+    // event::emit(FileIdAdded { user: sender, file_id });
 }
 
 /// Removes a file ID from the calling user's list.
@@ -108,7 +108,7 @@ public entry fun remove_file_id(
     }
 
     // Optional: Emit an event
-    event::emit(FileIdRemoved { user: sender, file_id: removed_id }); // Can use removed_id or file_id_to_remove
+    // event::emit(FileIdRemoved { user: sender, file_id: removed_id }); // Can use removed_id or file_id_to_remove
 }
 
 // --- View Function (Read-Only) ---
@@ -119,7 +119,7 @@ public entry fun remove_file_id(
 public fun get_file_ids(registry: &FileRegistry, user_address: address): vector<ID> {
     if (registry.user_files.contains(user_address)) {
         // Return a copy of the vector
-        *table::borrow(®istry.user_files, user_address)
+        *registry.user_files.borrow(user_address)
     } else {
         // User not found or has no files, return empty vector
         vector::empty<ID>()
@@ -142,7 +142,7 @@ public fun get_file_ids(registry: &FileRegistry, user_address: address): vector<
 #[view]
 public fun get_file_count(registry: &FileRegistry, user_address: address): u64 {
     if (registry.user_files.contains(user_address)) {
-        vector::length(table::borrow(®istry.user_files, user_address))
+        vector::length(registry.user_files.borrow(user_address))
     } else {
         0
     }
