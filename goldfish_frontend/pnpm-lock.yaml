@@ -14,6 +14,9 @@ importers:
       '@mysten/sui':
         specifier: ^1.28.2
         version: 1.28.2(typescript@5.7.3)
+      '@mysten/walrus':
+        specifier: ^0.0.19
+        version: 0.0.19(typescript@5.7.3)
       '@radix-ui/react-dropdown-menu':
         specifier: ^2.1.12
         version: 2.1.12(@types/react-dom@19.1.2(@types/react@19.1.2))(@types/react@19.1.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -487,6 +490,12 @@ packages:
 
   '@mysten/wallet-standard@0.14.7':
     resolution: {integrity: sha512-0X97MBDdbRyobm4mLvwqMW30t5nN6njLU9roN4bcugFiQGXtcyTA6oyoFgpeXCjNGTmamNOnLwsBJ/A8Iet/jw==}
+
+  '@mysten/walrus-wasm@0.0.6':
+    resolution: {integrity: sha512-rqXopgWqALp8jdVaHeW64P5I7MmzEGy8gCFbfzK8xGgWGpSjKtvVeHJ9EguRVOxALaYtDBVlmMPnoySJi+bLjA==}
+
+  '@mysten/walrus@0.0.19':
+    resolution: {integrity: sha512-xcN7tgz9fUdbjxz5e3/TIz9eZxJLfJxjZlQejYP5MdiD6jqM5Gr0nM6af1IF9gBRpx6N3IHmw0U29M+11oMm8Q==}
 
   '@mysten/window-wallet-core@0.0.2':
     resolution: {integrity: sha512-u57gHFlLYPDTK5bDeabRjkIdyLaiFVwL3bVbnBtu5WJpfFOv/KMOpIQt4820ICBG843jN35tzlulQ0nlbWCYeA==}
@@ -1227,6 +1236,9 @@ packages:
 
   csstype@3.1.3:
     resolution: {integrity: sha512-M1uQkMl8rQK/szD0LNhtqxIPLpimGm8sOBwU7lLnCpSbTyY3yeU1Vc7l4KT5zT4s/yOxHH5O7tIuuLOCnLADRw==}
+
+  dataloader@2.2.3:
+    resolution: {integrity: sha512-y2krtASINtPFS1rSDjacrFgn1dcUuoREVabwlOGOe4SdxenREqwjwjElAdwvbGM7kgZz9a3KVicWR7vcz8rnzA==}
 
   debug@4.4.0:
     resolution: {integrity: sha512-6WTZ/IxCY/T6BALoZHaE4ctp9xm+Z5kY/pzYaCHRFeyVhojxlrm+46y68HA6hr0TcwEssoxNiDEUJQjfPZ/RYA==}
@@ -2319,6 +2331,20 @@ snapshots:
       - '@gql.tada/vue-support'
       - typescript
 
+  '@mysten/walrus-wasm@0.0.6': {}
+
+  '@mysten/walrus@0.0.19(typescript@5.7.3)':
+    dependencies:
+      '@mysten/bcs': 1.6.0
+      '@mysten/sui': 1.28.2(typescript@5.7.3)
+      '@mysten/utils': 0.0.0
+      '@mysten/walrus-wasm': 0.0.6
+      dataloader: 2.2.3
+    transitivePeerDependencies:
+      - '@gql.tada/svelte-support'
+      - '@gql.tada/vue-support'
+      - typescript
+
   '@mysten/window-wallet-core@0.0.2':
     dependencies:
       '@mysten/utils': 0.0.0
@@ -3030,6 +3056,8 @@ snapshots:
   cssesc@3.0.0: {}
 
   csstype@3.1.3: {}
+
+  dataloader@2.2.3: {}
 
   debug@4.4.0:
     dependencies:
