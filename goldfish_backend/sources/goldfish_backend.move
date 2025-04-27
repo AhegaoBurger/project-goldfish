@@ -2,12 +2,7 @@
 /// Module: goldfish_backend
 module goldfish_backend::goldfish_backend;
 
-use sui::object::{Self, ID, UID};
-use sui::transfer;
-use sui::tx_context::{Self, TxContext};
 use sui::table::{Self, Table};
-use sui::address;
-use std::vector;
 use sui::event; // Optional: For emitting events
 
 /// The main shared object holding the registry of file IDs per user.
