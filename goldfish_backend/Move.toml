@@ -1,6 +1,7 @@
 [package]
 name = "goldfish_backend"
-edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+edition = "2024.beta"     # edition = "legacy" to use legacy (pre-2024) Move
+version = "0.0.0"
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 
@@ -19,6 +20,7 @@ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 
 [addresses]
 goldfish_backend = "0x0"
+artur = "0x8eb94720800f4a437b5ceb4c855be6a5f666d3515c5d9d0a734856ccc9ee8a17"
 
 # Named addresses will be accessible in Move as `@name`. They're also exported:
 # for example, `std = "0x1"` is exported by the Standard Library.
@@ -33,4 +35,3 @@ goldfish_backend = "0x0"
 # The dev-addresses section allows overwriting named addresses for the `--test`
 # and `--dev` modes.
 # alice = "0xB0B"
-
