@@ -7,10 +7,11 @@ import { useSuiClient, useSignAndExecuteTransaction, useCurrentWallet, useCurren
 // Import Transaction from '@mysten/sui/transactions' (updated class name)
 import { Transaction } from '@mysten/sui/transactions';
 import { WalrusClient, RetryableWalrusClientError } from '@mysten/walrus';
+import {packageId, fileRegistryObjectId } from "../constants"
 
 // --- !!! IMPORTANT: Replace with your actual deployed contract details !!! ---
-const YOUR_PACKAGE_ID = '0xYOUR_PACKAGE_ID'; // Example: 0xcaffee...
-const YOUR_REGISTRY_OBJECT_ID = '0xYOUR_REGISTRY_OBJECT_ID'; // Example: 0xfeed...
+const YOUR_PACKAGE_ID = packageId; // Example: 0xcaffee...
+const YOUR_REGISTRY_OBJECT_ID = fileRegistryObjectId; // Example: 0xfeed...
 const NETWORK = 'testnet'; // Should match your WalletProvider network
 // ---
 
@@ -18,7 +19,7 @@ const NETWORK = 'testnet'; // Should match your WalletProvider network
 // Ensure you have the wasm file available. You might need to install '@mysten/walrus-wasm'
 // npm install @mysten/walrus-wasm
 // yarn add @mysten/walrus-wasm
-import walrusWasmUrl from '@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url'; // Vite specific import
+// import walrusWasmUrl from '@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url'; // Vite specific import
 // ---
 
 function WalrusUploader() {
@@ -39,11 +40,11 @@ function WalrusUploader() {
 	// Memoize Walrus Client instance
 	const walrusClient = useMemo(() => {
         if (!suiClient) return null;
-		console.log('Initializing WalrusClient with WASM URL:', walrusWasmUrl);
+		// console.log('Initializing WalrusClient with WASM URL:', walrusWasmUrl);
 		return new WalrusClient({
 			suiClient: suiClient,
 			network: NETWORK,
-			wasmUrl: walrusWasmUrl,
+			// wasmUrl: walrusWasmUrl,
             storageNodeClientOptions: {
                 onError: (error) => console.error("Walrus Node Error:", error),
             }
@@ -135,8 +136,8 @@ function WalrusUploader() {
 
                     // Check effects status (structure might differ slightly, but status should exist)
                     // The default hook return includes effects, so this check remains valid.
-                    if (result.effects?.status?.status !== 'success') {
-                         throw new Error(`Sui transaction failed: ${result.effects?.status?.error || 'Unknown error'}`);
+                    if (result.effects !== 'success') {
+                         throw new Error(`Sui transaction failed: ${result.effects || 'Unknown error'}`);
                     }
 
 					setStatusMessage(`Success! File uploaded and ID stored on Sui.`);

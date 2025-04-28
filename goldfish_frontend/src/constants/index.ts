@@ -1,4 +1,4 @@
 export const packageId =
   "0x5889123b405ec7e4c6dd983e88059763c7d6f4711e52661f311a0cd4773d3943";
-export const coinManager =
+export const fileRegistryObjectId =
   "0x26c098889dddf360f0e20f097214518a11e252a301539ffbc025c70d7f05d523";

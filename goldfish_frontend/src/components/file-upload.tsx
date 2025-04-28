@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Upload, X } from "lucide-react"
+import WalrusUploader from "@/components/WalrusUploader"
 
 export default function FileUpload() {
   const [dragActive, setDragActive] = useState(false)
@@ -40,6 +41,8 @@ export default function FileUpload() {
   }
 
   return (
+    <>
+    <WalrusUploader />
     <Card>
       <CardHeader>
         <CardTitle>Upload Files</CardTitle>
@@ -87,5 +90,6 @@ export default function FileUpload() {
         </Button>
       </CardFooter>
     </Card>
+    </>
   )
 }
