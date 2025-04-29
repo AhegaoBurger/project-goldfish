@@ -7,11 +7,10 @@ import { useSuiClient, useSignAndExecuteTransaction, useCurrentWallet, useCurren
 // Import Transaction from '@mysten/sui/transactions' (updated class name)
 import { Transaction } from '@mysten/sui/transactions';
 import { WalrusClient, RetryableWalrusClientError } from '@mysten/walrus';
-import {packageId, fileRegistryObjectId } from "../constants"
+import {GOLDFISH_PACKAGE_ID, FILE_REGISTRY_OBJECT_ID, FILE_REGISTRY_MODULE_NAME } from "../constants"
+import { Button } from "@/components/ui/button"
 
 // --- !!! IMPORTANT: Replace with your actual deployed contract details !!! ---
-const YOUR_PACKAGE_ID = packageId; // Example: 0xcaffee...
-const YOUR_REGISTRY_OBJECT_ID = fileRegistryObjectId; // Example: 0xfeed...
 const NETWORK = 'testnet'; // Should match your WalletProvider network
 // ---
 
@@ -111,9 +110,9 @@ function WalrusUploader() {
                     const tx = new Transaction();
 
 					tx.moveCall({
-						target: `${YOUR_PACKAGE_ID}::file_registry::add_file_id`,
+						target: `${GOLDFISH_PACKAGE_ID}::${FILE_REGISTRY_MODULE_NAME}::add_file_id`,
 						arguments: [
-							tx.object(YOUR_REGISTRY_OBJECT_ID), // Shared registry object
+							tx.object(FILE_REGISTRY_OBJECT_ID), // Shared registry object
                             // Use the new pure helper tx.pure.string() for the blob ID.
                             // This assumes your Move function `add_file_id` now accepts
                             // vector<u8> or String instead of sui::object::ID, or can parse
@@ -172,12 +171,12 @@ function WalrusUploader() {
 	return (
 		<div>
 			<input type="file" onChange={handleFileChange} disabled={isUploading} />
-			<button
+			<Button
 				onClick={handleUpload}
 				disabled={!file || isUploading || !currentWallet || !walrusClient}
 			>
 				{isUploading ? 'Uploading...' : 'Upload File'}
-			</button>
+			</Button>
 
 			{statusMessage && <p style={{ color: 'blue' }}>{statusMessage}</p>}
 			{errorMessage && <p style={{ color: 'red' }}>Error: {errorMessage}</p>}

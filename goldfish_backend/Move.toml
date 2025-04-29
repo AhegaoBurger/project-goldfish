@@ -21,6 +21,7 @@ version = "0.0.0"
 [addresses]
 goldfish_backend = "0x0"
 artur = "0x8eb94720800f4a437b5ceb4c855be6a5f666d3515c5d9d0a734856ccc9ee8a17"
+active_address = "0x3f5ff462ef66bdf5615a84aa5798fae8f0878be644a1dd53fb1b78bfd86f2ecf"
 
 # Named addresses will be accessible in Move as `@name`. They're also exported:
 # for example, `std = "0x1"` is exported by the Standard Library.

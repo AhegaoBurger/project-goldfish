@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "82E8D80BDBFAF2671D8EF743B76126C3A6860CB9AD6D8ECF305AC4FA699C63E2"
+manifest_digest = "D97475CD954A2E01BE2A984D7ADAC71D857B4EEEAA19878C9D48499F9C3CE77D"
 deps_digest = "F9B494B64F0615AED0E98FC12A85B85ECD2BC5185C22D30E7F67786BB52E507C"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
@@ -13,7 +13,7 @@ dependencies = [
 
 [[move.package]]
 id = "Bridge"
-source = { git = "https://github.com/MystenLabs/sui.git", rev = "fbb68879cbd1", subdir = "crates/sui-framework/packages/bridge" }
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "e54b798790ed", subdir = "crates/sui-framework/packages/bridge" }
 
 dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -23,11 +23,11 @@ dependencies = [
 
 [[move.package]]
 id = "MoveStdlib"
-source = { git = "https://github.com/MystenLabs/sui.git", rev = "fbb68879cbd1", subdir = "crates/sui-framework/packages/move-stdlib" }
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "e54b798790ed", subdir = "crates/sui-framework/packages/move-stdlib" }
 
 [[move.package]]
 id = "Sui"
-source = { git = "https://github.com/MystenLabs/sui.git", rev = "fbb68879cbd1", subdir = "crates/sui-framework/packages/sui-framework" }
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "e54b798790ed", subdir = "crates/sui-framework/packages/sui-framework" }
 
 dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -35,7 +35,7 @@ dependencies = [
 
 [[move.package]]
 id = "SuiSystem"
-source = { git = "https://github.com/MystenLabs/sui.git", rev = "fbb68879cbd1", subdir = "crates/sui-framework/packages/sui-system" }
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "e54b798790ed", subdir = "crates/sui-framework/packages/sui-system" }
 
 dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -43,14 +43,20 @@ dependencies = [
 ]
 
 [move.toolchain-version]
-compiler-version = "1.47.0"
+compiler-version = "1.48.0"
 edition = "2024.beta"
 flavor = "sui"
 
 [env]
 
 [env.devnet]
-chain-id = "22527cc7"
-original-published-id = "0x5889123b405ec7e4c6dd983e88059763c7d6f4711e52661f311a0cd4773d3943"
-latest-published-id = "0x5889123b405ec7e4c6dd983e88059763c7d6f4711e52661f311a0cd4773d3943"
+chain-id = "f12dda03"
+original-published-id = "0x1ef60a297964811c40c2f2367411e67c591ed20db0b29c1c9047bd486364ad0d"
+latest-published-id = "0x1ef60a297964811c40c2f2367411e67c591ed20db0b29c1c9047bd486364ad0d"
+published-version = "1"
+
+[env.testnet]
+chain-id = "4c78adac"
+original-published-id = "0x253d649d9f61ed198816465f9fed02095e5ee352c929f8f2cf833e33c2a96f2d"
+latest-published-id = "0x253d649d9f61ed198816465f9fed02095e5ee352c929f8f2cf833e33c2a96f2d"
 published-version = "1"

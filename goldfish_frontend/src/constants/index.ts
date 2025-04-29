@@ -1,4 +1,5 @@
-export const packageId =
-  "0x5889123b405ec7e4c6dd983e88059763c7d6f4711e52661f311a0cd4773d3943";
-export const fileRegistryObjectId =
-  "0x26c098889dddf360f0e20f097214518a11e252a301539ffbc025c70d7f05d523";
+export const GOLDFISH_PACKAGE_ID =
+  "0x253d649d9f61ed198816465f9fed02095e5ee352c929f8f2cf833e33c2a96f2d";
+export const FILE_REGISTRY_OBJECT_ID =
+  "0x59be4690a589fb08a62c6b7ddfdd2d67afd63f6f40516ab2374e7bab0be54dba";
+  export const FILE_REGISTRY_MODULE_NAME = 'goldfish_backend'; 
