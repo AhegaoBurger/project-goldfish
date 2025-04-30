@@ -1,10 +1,12 @@
 // src/WalrusUploader.tsx
 import React, { useState, useCallback, useMemo } from 'react';
 // Import useSignAndExecuteTransaction from dapp-kit (updated hook name)
-import { useSuiClient, useSignAndExecuteTransaction, useCurrentWallet, useCurrentAccount } from '@mysten/dapp-kit';
-// Import from '@mysten/sui/client' (no .js)
-// import { SuiClient } from '@mysten/sui/client';
-// Import Transaction from '@mysten/sui/transactions' (updated class name)
+import { 
+	useSuiClient, 
+	useSignAndExecuteTransaction, 
+	useCurrentWallet, 
+	useCurrentAccount 
+} from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 import { WalrusClient, RetryableWalrusClientError } from '@mysten/walrus';
 import {GOLDFISH_PACKAGE_ID, FILE_REGISTRY_OBJECT_ID, FILE_REGISTRY_MODULE_NAME } from "../constants"
@@ -93,13 +95,21 @@ function WalrusUploader() {
 					// 2. Upload blob to Walrus (Still simulated - see previous notes)
                     console.warn("Walrus `writeBlob` with frontend wallet signer needs careful handling. Simulating upload for now.");
                     setStatusMessage('Simulating Walrus upload...');
-                    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-                    const simulatedBlobId = `simulated-blob-${Date.now()}`;
-                    console.log('Simulated Walrus Upload Complete. Blob ID:', simulatedBlobId);
-                    setStatusMessage('Walrus upload complete (simulated). Storing ID on Sui...');
-                    const actualBlobId = simulatedBlobId; // Using the simulated ID
+                    // await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+                    // const simulatedBlobId = `simulated-blob-${Date.now()}`;
+                    // console.log('Simulated Walrus Upload Complete. Blob ID:', simulatedBlobId);
+                    // setStatusMessage('Walrus upload complete (simulated). Storing ID on Sui...');
+                    // const actualBlobId = simulatedBlobId; // Using the simulated ID
 
-                    if (!actualBlobId) {
+					// Actual upload to Walrus
+					const { blobId } = await walrusClient.writeBlob({
+						blob: fileContent,
+						deletable: true,
+						epochs: 3,
+						signer: currentAccount,
+					});
+
+                    if (!blobId) {
                         throw new Error("Failed to get Blob ID from Walrus upload.");
                     }
 
@@ -118,7 +128,7 @@ function WalrusUploader() {
                             // vector<u8> or String instead of sui::object::ID, or can parse
                             // the string representation. Adjust if your Move function strictly
                             // requires a different type or an actual sui::object::ID.
-                            tx.pure.string(actualBlobId),
+                            tx.pure.string(blobId),
 						],
 					});
 
@@ -140,7 +150,7 @@ function WalrusUploader() {
                     }
 
 					setStatusMessage(`Success! File uploaded and ID stored on Sui.`);
-					setStoredBlobId(actualBlobId);
+					setStoredBlobId(blobId);
 
 				} catch (error: any) {
 					console.error('Upload or Sui transaction failed:', error);
