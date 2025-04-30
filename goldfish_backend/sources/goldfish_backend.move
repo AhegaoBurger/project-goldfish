@@ -3,13 +3,14 @@
 module goldfish_backend::goldfish_backend;
 
 use sui::table::{Self, Table};
+use std::string::String;
 // use sui::event; // Optional: For emitting events
 
 /// The main shared object holding the registry of file IDs per user.
 public struct FileRegistry has key {
     id: UID,
     /// Table mapping user address to a vector of their file IDs.
-    user_files: Table<address, vector<ID>>
+    user_files: Table<address, vector<String>>
 }
 
 // --- Error Codes ---
@@ -43,7 +44,7 @@ const EUserNotFound: u64 = 3; // Optional, depending on remove logic
 fun init(ctx: &mut TxContext) {
     let registry = FileRegistry {
         id: object::new(ctx),
-        user_files: table::new<address, vector<ID>>(ctx)
+        user_files: table::new<address, vector<String>>(ctx)
     };
     // Share the object so anyone can interact with it
     transfer::share_object(registry);
@@ -55,7 +56,7 @@ fun init(ctx: &mut TxContext) {
 /// Aborts if the file ID already exists in the user's list.
 public entry fun add_file_id(
     registry: &mut FileRegistry,
-    file_id: ID,
+    file_id: String,
     ctx: &TxContext
 ) {
     let sender = tx_context::sender(ctx);
@@ -70,7 +71,7 @@ public entry fun add_file_id(
         vector::push_back(user_files_vec, file_id);
     } else {
         // First time user is adding a file ID
-        let mut new_vec = vector::empty<ID>();
+        let mut new_vec = vector::empty<String>();
         vector::push_back(&mut new_vec, file_id); // Need &mut even for new vector
         table::add(&mut registry.user_files, sender, new_vec);
     }
@@ -83,7 +84,7 @@ public entry fun add_file_id(
 /// Aborts if the user has no list or if the file ID is not found in their list.
 public entry fun remove_file_id(
     registry: &mut FileRegistry,
-    file_id_to_remove: ID,
+    file_id_to_remove: String,
     ctx: &TxContext
 ) {
     let sender = tx_context::sender(ctx);
@@ -116,20 +117,20 @@ public entry fun remove_file_id(
 // #[view]
 /// Retrieves the list of file IDs for a given user address.
 /// Returns an empty vector if the user has no stored file IDs.
-public fun get_file_ids(registry: &FileRegistry, user_address: address): vector<ID> {
+public fun get_file_ids(registry: &FileRegistry, user_address: address): vector<String> {
     if (registry.user_files.contains(user_address)) {
         // Return a copy of the vector
         *registry.user_files.borrow(user_address)
     } else {
         // User not found or has no files, return empty vector
-        vector::empty<ID>()
+        vector::empty<String>()
     }
 }
 
 // #[view]
 /// Retrieves a specific file ID for a user by index. Useful for pagination UIs.
 /// Returns `option::none<ID>()` if the index is out of bounds or user doesn't exist.
-public fun get_file_id_by_index(registry: &FileRegistry, user_address: address, index: u64): Option<ID> {
+public fun get_file_id_by_index(registry: &FileRegistry, user_address: address, index: u64): Option<String> {
     if (registry.user_files.contains(user_address)) {
         // Borrow the vector immutably since we only need to read
         let user_files_vec = registry.user_files.borrow(user_address);
@@ -144,11 +145,11 @@ public fun get_file_id_by_index(registry: &FileRegistry, user_address: address, 
             option::some(*vector::borrow(user_files_vec, index))
         } else {
             // Index is out of bounds (index >= len)
-            option::none<ID>()
+            option::none<String>()
         }
     } else {
         // User address not found in the table
-        option::none<ID>()
+        option::none<String>()
     }
 }
 
