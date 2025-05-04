@@ -1,6 +1,7 @@
 import Header from "@/components/header";
 import FileUpload from "@/components/file-upload";
 import FileList from "@/components/file-list";
+import StorageInfo from "@/components/storage-info";
 
 function App() {
   return (
@@ -21,7 +22,10 @@ function App() {
 
           <div className="grid gap-8 md:grid-cols-1 lg:grid-cols-3">
             <div className="lg:col-span-2">
-              <FileList />
+              <div className="space-y-6">
+                <StorageInfo />
+                <FileList />
+              </div>
             </div>
             <div>
               <FileUpload />

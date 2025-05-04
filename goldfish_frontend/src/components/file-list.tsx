@@ -1,23 +1,38 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Input } from "@/components/ui/input"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { File, FileImage, FileText, FileVideo, MoreVertical, Music, Search } from "lucide-react"
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import {
+  File,
+  FileImage,
+  FileText,
+  FileVideo,
+  Music,
+  Search,
+} from "lucide-react";
+import FileOptions from "./file-options";
 
 type FileItem = {
-  id: string
-  name: string
-  type: string
-  size: string
-  lastModified: string
-}
+  id: string;
+  name: string;
+  type: string;
+  size: string;
+  lastModified: string;
+  storageEpochs: number;
+  isDeletable: boolean;
+};
 
 export default function FileList() {
-  const [searchQuery, setSearchQuery] = useState("")
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Sample file data
   const files: FileItem[] = [
@@ -27,6 +42,8 @@ export default function FileList() {
       type: "pdf",
       size: "2.4 MB",
       lastModified: "Today, 2:30 PM",
+      storageEpochs: 2,
+      isDeletable: true,
     },
     {
       id: "2",
@@ -34,6 +51,8 @@ export default function FileList() {
       type: "image",
       size: "840 KB",
       lastModified: "Yesterday, 10:15 AM",
+      storageEpochs: 1,
+      isDeletable: true,
     },
     {
       id: "3",
@@ -41,6 +60,8 @@ export default function FileList() {
       type: "spreadsheet",
       size: "1.2 MB",
       lastModified: "Apr 20, 2023",
+      storageEpochs: 3,
+      isDeletable: false,
     },
     {
       id: "4",
@@ -48,6 +69,8 @@ export default function FileList() {
       type: "video",
       size: "24.8 MB",
       lastModified: "Apr 18, 2023",
+      storageEpochs: 2,
+      isDeletable: true,
     },
     {
       id: "5",
@@ -55,6 +78,8 @@ export default function FileList() {
       type: "document",
       size: "320 KB",
       lastModified: "Apr 15, 2023",
+      storageEpochs: 1,
+      isDeletable: false,
     },
     {
       id: "6",
@@ -62,6 +87,8 @@ export default function FileList() {
       type: "presentation",
       size: "5.7 MB",
       lastModified: "Apr 10, 2023",
+      storageEpochs: 3,
+      isDeletable: true,
     },
     {
       id: "7",
@@ -69,26 +96,30 @@ export default function FileList() {
       type: "audio",
       size: "3.2 MB",
       lastModified: "Apr 5, 2023",
+      storageEpochs: 1,
+      isDeletable: true,
     },
-  ]
+  ];
 
-  const filteredFiles = files.filter((file) => file.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredFiles = files.filter((file) =>
+    file.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   const getFileIcon = (type: string) => {
     switch (type) {
       case "image":
-        return <FileImage className="h-5 w-5 text-blue-500" />
+        return <FileImage className="h-5 w-5 text-blue-500" />;
       case "video":
-        return <FileVideo className="h-5 w-5 text-red-500" />
+        return <FileVideo className="h-5 w-5 text-red-500" />;
       case "audio":
-        return <Music className="h-5 w-5 text-purple-500" />
+        return <Music className="h-5 w-5 text-purple-500" />;
       case "document":
       case "pdf":
-        return <FileText className="h-5 w-5 text-amber-500" />
+        return <FileText className="h-5 w-5 text-amber-500" />;
       default:
-        return <File className="h-5 w-5 text-gray-500" />
+        return <File className="h-5 w-5 text-gray-500" />;
     }
-  }
+  };
 
   return (
     <Card>
@@ -98,7 +129,9 @@ export default function FileList() {
             <CardTitle>Your Files</CardTitle>
             <CardDescription>Manage your stored files</CardDescription>
           </div>
-          <Button className="bg-amber-500 hover:bg-amber-600">New Folder</Button>
+          <Button className="bg-amber-500 hover:bg-amber-600">
+            New Folder
+          </Button>
         </div>
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
@@ -122,37 +155,55 @@ export default function FileList() {
           <TabsContent value="all" className="m-0">
             <div className="rounded-md border">
               <div className="grid grid-cols-12 gap-2 border-b bg-gray-50 p-3 text-sm font-medium text-gray-500">
-                <div className="col-span-6">Name</div>
-                <div className="col-span-2">Size</div>
-                <div className="col-span-3">Last Modified</div>
+                <div className="col-span-4">Name</div>
+                <div className="col-span-1">Size</div>
+                <div className="col-span-2">Last Modified</div>
+                <div className="col-span-2">Storage (Epochs)</div>
+                <div className="col-span-2">Deletable</div>
                 <div className="col-span-1"></div>
               </div>
 
               {filteredFiles.length > 0 ? (
                 <div className="divide-y">
                   {filteredFiles.map((file) => (
-                    <div key={file.id} className="grid grid-cols-12 gap-2 p-3 text-sm items-center">
-                      <div className="col-span-6 flex items-center gap-2">
+                    <div
+                      key={file.id}
+                      className="grid grid-cols-12 gap-2 p-3 text-sm items-center"
+                    >
+                      <div className="col-span-4 flex items-center gap-2">
                         {getFileIcon(file.type)}
-                        <span className="font-medium truncate">{file.name}</span>
+                        <span className="font-medium truncate">
+                          {file.name}
+                        </span>
                       </div>
-                      <div className="col-span-2 text-gray-500">{file.size}</div>
-                      <div className="col-span-3 text-gray-500">{file.lastModified}</div>
+                      <div className="col-span-1 text-gray-500">
+                        {file.size}
+                      </div>
+                      <div className="col-span-2 text-gray-500">
+                        {file.lastModified}
+                      </div>
+                      <div className="col-span-2 flex items-center">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs ${file.storageEpochs > 2 ? "bg-green-100 text-green-800" : file.storageEpochs > 1 ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"}`}
+                        >
+                          {file.storageEpochs}{" "}
+                          {file.storageEpochs === 1 ? "Epoch" : "Epochs"}
+                        </span>
+                      </div>
+                      <div className="col-span-2">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs ${file.isDeletable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
+                        >
+                          {file.isDeletable ? "Yes" : "No"}
+                        </span>
+                      </div>
                       <div className="col-span-1 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical className="h-4 w-4" />
-                              <span className="sr-only">Open menu</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>Download</DropdownMenuItem>
-                            <DropdownMenuItem>Share</DropdownMenuItem>
-                            <DropdownMenuItem>Rename</DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <FileOptions
+                          fileId={file.id}
+                          fileName={file.name}
+                          storageEpochs={file.storageEpochs}
+                          isDeletable={file.isDeletable}
+                        />
                       </div>
                     </div>
                   ))}
@@ -185,5 +236,5 @@ export default function FileList() {
         </Tabs>
       </CardContent>
     </Card>
-  )
+  );
 }
