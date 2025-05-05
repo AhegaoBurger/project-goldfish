@@ -1,16 +1,16 @@
-
 /// Module: goldfish_backend
 module goldfish_backend::goldfish_backend;
 
-use sui::table::{Self, Table};
 use std::string::String;
+use sui::table::{Self, Table};
+
 // use sui::event; // Optional: For emitting events
 
 /// The main shared object holding the registry of file IDs per user.
 public struct FileRegistry has key {
     id: UID,
     /// Table mapping user address to a vector of their file IDs.
-    user_files: Table<address, vector<String>>
+    user_files: Table<address, vector<String>>,
 }
 
 // --- Error Codes ---
@@ -19,8 +19,8 @@ public struct FileRegistry has key {
 const EFileIdAlreadyExists: u64 = 1;
 /// Error when trying to remove a file ID that is not associated with the user.
 const EFileIdNotFound: u64 = 2;
-    /// Error when trying to perform an operation for a user not yet in the registry
-    /// (specifically relevant for remove operation if we check existence first).
+/// Error when trying to perform an operation for a user not yet in the registry
+/// (specifically relevant for remove operation if we check existence first).
 const EUserNotFound: u64 = 3; // Optional, depending on remove logic
 
 // --- Events (Optional but Recommended) ---
@@ -37,14 +37,13 @@ const EUserNotFound: u64 = 3; // Optional, depending on remove logic
 //     file_id: ID
 // }
 
-
 // --- Initialization ---
 
 /// Called once when the module is published. Creates and shares the FileRegistry.
 fun init(ctx: &mut TxContext) {
     let registry = FileRegistry {
         id: object::new(ctx),
-        user_files: table::new<address, vector<String>>(ctx)
+        user_files: table::new<address, vector<String>>(ctx),
     };
     // Share the object so anyone can interact with it
     transfer::share_object(registry);
@@ -54,11 +53,7 @@ fun init(ctx: &mut TxContext) {
 
 /// Adds a file ID to the calling user's list.
 /// Aborts if the file ID already exists in the user's list.
-public entry fun add_file_id(
-    registry: &mut FileRegistry,
-    file_id: String,
-    ctx: &TxContext
-) {
+public entry fun add_file_id(registry: &mut FileRegistry, file_id: String, ctx: &TxContext) {
     let sender = tx_context::sender(ctx);
 
     if (registry.user_files.contains(sender)) {
@@ -85,7 +80,7 @@ public entry fun add_file_id(
 public entry fun remove_file_id(
     registry: &mut FileRegistry,
     file_id_to_remove: String,
-    ctx: &TxContext
+    ctx: &TxContext,
 ) {
     let sender = tx_context::sender(ctx);
 
@@ -122,7 +117,6 @@ public fun get_file_ids(registry: &FileRegistry, user_address: address): vector<
         // Return a copy of the vector
         *registry.user_files.borrow(user_address)
     } else {
-        // User not found or has no files, return empty vector
         vector::empty<String>()
     }
 }
@@ -130,7 +124,11 @@ public fun get_file_ids(registry: &FileRegistry, user_address: address): vector<
 // #[view]
 /// Retrieves a specific file ID for a user by index. Useful for pagination UIs.
 /// Returns `option::none<ID>()` if the index is out of bounds or user doesn't exist.
-public fun get_file_id_by_index(registry: &FileRegistry, user_address: address, index: u64): Option<String> {
+public fun get_file_id_by_index(
+    registry: &FileRegistry,
+    user_address: address,
+    index: u64,
+): Option<String> {
     if (registry.user_files.contains(user_address)) {
         // Borrow the vector immutably since we only need to read
         let user_files_vec = registry.user_files.borrow(user_address);
@@ -152,8 +150,6 @@ public fun get_file_id_by_index(registry: &FileRegistry, user_address: address, 
         option::none<String>()
     }
 }
-
-
 
 // #[view]
 /// Gets the total count of file IDs stored for a specific user.

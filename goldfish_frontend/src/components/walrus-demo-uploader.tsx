@@ -24,7 +24,7 @@ const NETWORK = "testnet"; // Should match your WalletProvider network
 // Ensure you have the wasm file available. You might need to install '@mysten/walrus-wasm'
 // npm install @mysten/walrus-wasm
 // yarn add @mysten/walrus-wasm
-// import walrusWasmUrl from '@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url'; // Vite specific import
+import walrusWasmUrl from '@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url'; // Vite specific import
 // ---
 
 function WalrusDemoUploader() {
@@ -49,7 +49,7 @@ function WalrusDemoUploader() {
     return new WalrusClient({
       suiClient: suiClient,
       network: NETWORK,
-      // wasmUrl: walrusWasmUrl,
+      wasmUrl: walrusWasmUrl,
       storageNodeClientOptions: {
         onError: (error) => console.error("Walrus Node Error:", error),
       },
@@ -92,6 +92,9 @@ function WalrusDemoUploader() {
         }
 
         const fileContent = new Uint8Array(e.target.result as ArrayBuffer);
+
+        const encoded = await walrusClient.encodeBlob(fileContent);
+
         console.log(
           `File read: ${file.name}, size: ${fileContent.length} bytes`,
         );
@@ -99,10 +102,10 @@ function WalrusDemoUploader() {
 
         try {
           // 2. Upload blob to Walrus (Still simulated - see previous notes)
-          console.warn(
-            "Walrus `writeBlob` with frontend wallet signer needs careful handling. Simulating upload for now.",
-          );
-          setStatusMessage("Simulating Walrus upload...");
+        //   console.warn(
+        //     "Walrus `writeBlob` with frontend wallet signer needs careful handling. Simulating upload for now.",
+        //   );
+          setStatusMessage("Doing Walrus upload...");
 
         //   await new Promise((resolve) => setTimeout(resolve, 1500)); // Simulate network delay
         //   const simulatedBlobId = `simulated-blob-${Date.now()}`;
@@ -116,14 +119,84 @@ function WalrusDemoUploader() {
         //   const blobId = simulatedBlobId; // Using the simulated ID
 
         //   Actual upload to Walrus
-          const { blobId } = await walrusClient.writeBlob({
-          	blob: fileContent,
-          	deletable: true,
-          	epochs: 3,
-          	signer: currentWallet,
-          });
+        const registerBlobTransaction = await walrusClient.registerBlobTransaction({
+			blobId: encoded.blobId,
+			rootHash: encoded.rootHash,
+			size: file.size,
+			deletable: true,
+			epochs: 3,
+			owner: currentAccount.address,
+		});
 
-          if (!blobId) {
+        console.log("registerBlobTransaction", registerBlobTransaction);
+
+		const { digest } = await signAndExecute({ transaction: registerBlobTransaction });
+
+        console.log("digest", digest);
+
+		const { objectChanges, effects } = await suiClient.waitForTransaction({
+			digest,
+			options: { showObjectChanges: true, showEffects: true },
+		});
+
+        console.log("objectChanges", objectChanges);
+        console.log("effects", effects);
+
+		if (effects?.status.status !== 'success') {
+			throw new Error('Failed to register blob');
+		}
+
+		const blobType = await walrusClient.getBlobType();
+
+        console.log("blobType", blobType);
+
+		const blobObject = objectChanges?.find(
+			(change) => change.type === 'created' && change.objectType === blobType,
+		);
+
+		if (!blobObject || blobObject.type !== 'created') {
+			throw new Error('Blob object not found');
+		}
+
+		const confirmations = await walrusClient.writeEncodedBlobToNodes({
+			blobId: encoded.blobId,
+			metadata: encoded.metadata,
+			sliversByNode: encoded.sliversByNode,
+			deletable: true,
+			objectId: blobObject.objectId,
+		});
+
+        console.log("confirmations", confirmations);
+
+		const certifyBlobTransaction = await walrusClient.certifyBlobTransaction({
+			blobId: encoded.blobId,
+			blobObjectId: blobObject.objectId,
+			confirmations,
+			deletable: true,
+		});
+
+        console.log("certifyBlobTransaction", certifyBlobTransaction);
+
+		const { digest: certifyDigest } = await signAndExecute({
+			transaction: certifyBlobTransaction,
+		});
+
+        console.log("certifyDigest", certifyDigest);
+
+		const { effects: certifyEffects } = await suiClient.waitForTransaction({
+			digest: certifyDigest,
+			options: { showEffects: true },
+		});
+
+        console.log("certifyEffects", certifyEffects);
+
+		if (certifyEffects?.status.status !== 'success') {
+			throw new Error('Failed to certify blob');
+		}
+
+		// return encoded.blobId;
+
+          if (!encoded.blobId) {
             throw new Error("Failed to get Blob ID from Walrus upload.");
           }
 
@@ -142,7 +215,7 @@ function WalrusDemoUploader() {
               // vector<u8> or String instead of sui::object::ID, or can parse
               // the string representation. Adjust if your Move function strictly
               // requires a different type or an actual sui::object::ID.
-              tx.pure.string(blobId),
+              tx.pure.string(encoded.blobId),
             ],
           });
 
@@ -166,7 +239,7 @@ function WalrusDemoUploader() {
           // }
 
           setStatusMessage(`Success! File uploaded and ID stored on Sui.`);
-          setStoredBlobId(blobId);
+          setStoredBlobId(encoded.blobId);
         } catch (error: any) {
           console.error("Upload or Sui transaction failed:", error);
           if (error instanceof RetryableWalrusClientError) {

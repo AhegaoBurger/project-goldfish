@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Upload, X, File as FileIcon } from "lucide-react";
-// import WalrusUploader from "@/components/WalrusUploader";
+import WalrusDemoUploader from "@/components/walrus-demo-uploader";
 import {
   useSuiClient,
   useSignAndExecuteTransaction,
@@ -226,7 +226,7 @@ export default function FileUpload() {
 
   return (
     <>
-      {/* <WalrusUploader /> */}
+      <WalrusDemoUploader />
       <Card>
         <CardHeader>
           <CardTitle>Upload Files</CardTitle>

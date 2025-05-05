@@ -13,6 +13,7 @@
     "@mysten/dapp-kit": "^0.16.0",
     "@mysten/sui": "^1.28.2",
     "@mysten/walrus": "^0.0.19",
+    "@mysten/walrus-wasm": "^0.0.6",
     "@radix-ui/react-dropdown-menu": "^2.1.12",
     "@radix-ui/react-progress": "^1.1.4",
     "@radix-ui/react-slot": "^1.2.0",
