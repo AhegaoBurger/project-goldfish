@@ -27,7 +27,7 @@ const NETWORK = "testnet"; // Should match your WalletProvider network
 // import walrusWasmUrl from '@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url'; // Vite specific import
 // ---
 
-function WalrusUploader() {
+function WalrusDemoUploader() {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>("");
@@ -223,4 +223,4 @@ function WalrusUploader() {
   );
 }
 
-export default WalrusUploader;
+export default WalrusDemoUploader;
