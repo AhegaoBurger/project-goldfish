@@ -104,24 +104,24 @@ function WalrusDemoUploader() {
           );
           setStatusMessage("Simulating Walrus upload...");
 
-          await new Promise((resolve) => setTimeout(resolve, 1500)); // Simulate network delay
-          const simulatedBlobId = `simulated-blob-${Date.now()}`;
-          console.log(
-            "Simulated Walrus Upload Complete. Blob ID:",
-            simulatedBlobId,
-          );
-          setStatusMessage(
-            "Walrus upload complete (simulated). Storing ID on Sui...",
-          );
-          const blobId = simulatedBlobId; // Using the simulated ID
+        //   await new Promise((resolve) => setTimeout(resolve, 1500)); // Simulate network delay
+        //   const simulatedBlobId = `simulated-blob-${Date.now()}`;
+        //   console.log(
+        //     "Simulated Walrus Upload Complete. Blob ID:",
+        //     simulatedBlobId,
+        //   );
+        //   setStatusMessage(
+        //     "Walrus upload complete (simulated). Storing ID on Sui...",
+        //   );
+        //   const blobId = simulatedBlobId; // Using the simulated ID
 
-          // Actual upload to Walrus
-          // const { blobId } = await walrusClient.writeBlob({
-          // 	blob: fileContent,
-          // 	deletable: true,
-          // 	epochs: 3,
-          // 	signer: currentWallet.features,
-          // });
+        //   Actual upload to Walrus
+          const { blobId } = await walrusClient.writeBlob({
+          	blob: fileContent,
+          	deletable: true,
+          	epochs: 3,
+          	signer: currentWallet,
+          });
 
           if (!blobId) {
             throw new Error("Failed to get Blob ID from Walrus upload.");
