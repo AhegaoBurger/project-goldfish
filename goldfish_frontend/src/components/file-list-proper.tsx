@@ -77,93 +77,92 @@ export default function FileList() {
   // ---
 
   // --- Fetching Logic ---
-  useEffect(() => {
-    const fetchFileIds = async () => {
-      if (!currentAccount?.address || !suiClient) {
-        // ... (reset state logic) ...
-        return;
-      }
+  // useEffect(() => {
+  //   const fetchFileIds = async () => {
+  //     if (!currentAccount?.address || !suiClient) {
+  //       // ... (reset state logic) ...
+  //       return;
+  //     }
 
-      setIsLoading(true);
-      setFetchError(null);
-      setFetchedFiles([]);
+  //     setIsLoading(true);
+  //     setFetchError(null);
+  //     setFetchedFiles([]);
 
-      try {
-        const targetFunction = `${GOLDFISH_PACKAGE_ID}::${FILE_REGISTRY_MODULE_NAME}::get_file_ids`;
-        const args = [
-          FILE_REGISTRY_OBJECT_ID, // Argument 0: ID of the FileRegistry shared object
-          currentAccount.address   // Argument 1: User's address
-        ];
+  //     try {
+  //       const targetFunction = `${GOLDFISH_PACKAGE_ID}::${FILE_REGISTRY_MODULE_NAME}::get_file_ids`;
+  //       const args = [
+  //         FILE_REGISTRY_OBJECT_ID, // Argument 0: ID of the FileRegistry shared object
+  //         currentAccount.address   // Argument 1: User's address
+  //       ];
 
-        console.log(`Calling view function: ${targetFunction}`);
-        console.log(`Arguments:`, args);
+  //       console.log(`Calling view function: ${targetFunction}`);
+  //       console.log(`Arguments:`, args);
 
-        // Use sui_call for non-entry public functions
-        const viewResult = await suiClient.call('sui_call', {
-          package: GOLDFISH_PACKAGE_ID,
-          module: FILE_REGISTRY_MODULE_NAME,
-          function: 'get_file_ids',
-          typeArguments: [], // Your function doesn't have type parameters like <T>
-          arguments: args // Pass the arguments directly
-        });
+  //       // Use sui_call for non-entry public functions
+  //       const viewResult = await suiClient.call('sui_call', {
+  //         package: GOLDFISH_PACKAGE_ID,
+  //         module: FILE_REGISTRY_MODULE_NAME,
+  //         function: 'get_file_ids',
+  //         typeArguments: [], // Your function doesn't have type parameters like <T>
+  //         arguments: args // Pass the arguments directly
+  //       });
 
-        // --- CRITICAL STEP: Inspect the actual result ---
-        console.log("Raw view function result (viewResult):", JSON.stringify(viewResult, null, 2));
-        // ---
+  //       // --- CRITICAL STEP: Inspect the actual result ---
+  //       console.log("Raw view function result (viewResult):", JSON.stringify(viewResult, null, 2));
+  //       // ---
 
-        // --- Process Result (NEEDS ADJUSTMENT BASED ON CONSOLE LOG) ---
-        // The structure here is a GUESS based on common patterns.
-        // You MUST adjust this based on the actual output logged above.
-        let blobIds: string[] = [];
-        // Common pattern 1: Look in results[0].mutableReferenceOutputType[1].values
-        // Common pattern 2: Look in results[0].returnValues[0][0] (BCS bytes needing decoding)
-        // Common pattern 3: Look directly in results if simpler
+  //       // --- Process Result (NEEDS ADJUSTMENT BASED ON CONSOLE LOG) ---
+  //       // The structure here is a GUESS based on common patterns.
+  //       // You MUST adjust this based on the actual output logged above.
+  //       let blobIds: string[] = [];
+  //       // Common pattern 1: Look in results[0].mutableReferenceOutputType[1].values
+  //       // Common pattern 2: Look in results[0].returnValues[0][0] (BCS bytes needing decoding)
+  //       // Common pattern 3: Look directly in results if simpler
 
-        // Example GUESS based on potential structure:
-        if (viewResult && viewResult.results && viewResult.results.length > 0) {
-           // Adjust this path based on your console.log output!
-           const potentialDataPath = viewResult.results[0]?.mutableReferenceOutputType?.[1]?.values;
-           if (Array.isArray(potentialDataPath)) {
-               blobIds = potentialDataPath;
-           } else {
-               console.warn("Could not find expected array structure in view result. Check console log.");
-               // Maybe try parsing BCS if returnValues exists? (More complex)
-               // const returnValues = viewResult.results[0]?.returnValues;
-               // if (returnValues && returnValues[0]) {
-               //    // Need BCS schema and parsing logic here
-               // }
-           }
-        } else {
-             console.warn("View function call returned no results or unexpected structure.");
-        }
+  //       // Example GUESS based on potential structure:
+  //       if (viewResult && viewResult.results && viewResult.results.length > 0) {
+  //          // Adjust this path based on your console.log output!
+  //          const potentialDataPath = viewResult.results[0]?.mutableReferenceOutputType?.[1]?.values;
+  //          if (Array.isArray(potentialDataPath)) {
+  //              blobIds = potentialDataPath;
+  //          } else {
+  //              console.warn("Could not find expected array structure in view result. Check console log.");
+  //              // Maybe try parsing BCS if returnValues exists? (More complex)
+  //              // const returnValues = viewResult.results[0]?.returnValues;
+  //              // if (returnValues && returnValues[0]) {
+  //              //    // Need BCS schema and parsing logic here
+  //              // }
+  //          }
+  //       } else {
+  //            console.warn("View function call returned no results or unexpected structure.");
+  //       }
 
+  //       console.log("Parsed/Extracted blob IDs:", blobIds);
 
-        console.log("Parsed/Extracted blob IDs:", blobIds);
+  //       // --- Simulate Metadata (using extracted blobIds) ---
+  //       const simulatedFiles = blobIds.map((blobId, index) => ({
+  //         id: blobId,
+  //         name: `file_${blobId.substring(0, 8)}_${index}.dat`,
+  //         type: ["image", "document", "video", "audio", "other"][index % 5],
+  //         size: `${(Math.random() * 10 + 0.1).toFixed(1)} MB`,
+  //         lastModified: `Apr ${30 - index}, 2024`,
+  //         storageEpochs: (index % 3) + 1,
+  //         isDeletable: index % 2 === 0,
+  //       }));
+  //       setFetchedFiles(simulatedFiles);
+  //       // ---
 
-        // --- Simulate Metadata (using extracted blobIds) ---
-        const simulatedFiles = blobIds.map((blobId, index) => ({
-          id: blobId,
-          name: `file_${blobId.substring(0, 8)}_${index}.dat`,
-          type: ["image", "document", "video", "audio", "other"][index % 5],
-          size: `${(Math.random() * 10 + 0.1).toFixed(1)} MB`,
-          lastModified: `Apr ${30 - index}, 2024`,
-          storageEpochs: (index % 3) + 1,
-          isDeletable: index % 2 === 0,
-        }));
-        setFetchedFiles(simulatedFiles);
-        // ---
+  //     } catch (error: any) {
+  //       console.error("Error fetching file IDs:", error);
+  //       setFetchError(`Failed to fetch file list: ${error.message || "Unknown error"}`);
+  //       setFetchedFiles([]);
+  //     } finally {
+  //       setIsLoading(false);
+  //     }
+  //   };
 
-      } catch (error: any) {
-        console.error("Error fetching file IDs:", error);
-        setFetchError(`Failed to fetch file list: ${error.message || "Unknown error"}`);
-        setFetchedFiles([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchFileIds();
-  }, [currentAccount, suiClient]); // Dependencies
+  //   fetchFileIds();
+  // }, [currentAccount, suiClient]); // Dependencies
 
   // --- Filtering Logic ---
   const filteredFiles = fetchedFiles.filter((file) =>
