@@ -296,7 +296,14 @@ export default function FileUpload() {
       );
       setIsUploading(false);
     }
-  }, [file, currentWallet, currentAccount, signAndExecute, walrusClient]);
+  }, [
+    file,
+    currentWallet,
+    currentAccount,
+    signAndExecute,
+    walrusClient,
+    suiClient,
+  ]);
 
   const removeFile = () => {
     // setFiles(files.filter((_, i) => i !== index)); // original
