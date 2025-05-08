@@ -1,11 +1,7 @@
 // src/hooks/useUserDynamicFieldValues.ts
 import { useState, useEffect, useCallback } from "react";
 import { useSuiClient, useCurrentAccount } from "@mysten/dapp-kit";
-import type {
-  SuiClient,
-  DynamicFieldInfo,
-  SuiObjectResponse,
-} from "@mysten/sui/client";
+import type { DynamicFieldInfo, SuiObjectResponse } from "@mysten/sui/client";
 
 // Defines the structure of the object found in `field.data.content.fields`
 // Based on your logs: { id: { id: '...' }, name: '0xUSER_ADDRESS', value: ['...'] }
