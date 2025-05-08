@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import FileOptions from "./file-options";
 import { TABLE_OBJECT_ID } from "../constants";
-import { useDynamicFieldValues } from "../hooks/useUserFilesIds";
+import { useUserDynamicFieldValues } from "../hooks/useUserFilesIds";
 
 type FileItem = {
   id: string;
@@ -35,7 +35,7 @@ type FileItem = {
 
 export default function FileList() {
   const [searchQuery, setSearchQuery] = useState("");
-  const { values, isLoading, error, refetch } = useDynamicFieldValues({
+  const { userValues, isLoading, error, refetch } = useUserDynamicFieldValues({
     parentId: TABLE_OBJECT_ID,
   });
 
@@ -227,9 +227,11 @@ export default function FileList() {
                 </div>
               )}
             </div>
-            {values.length === 0 && <p>No values found.</p>}
+            {userValues.length === 0 && (
+              <p>No values found for your account.</p>
+            )}
             <ul>
-              {values.map((valueArray, index) => (
+              {userValues.map((valueArray, index) => (
                 <li key={index}>{JSON.stringify(valueArray)}</li>
               ))}
             </ul>

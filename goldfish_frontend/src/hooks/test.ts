@@ -32,7 +32,7 @@ const readDynamicFields = async () => {
       name: entry.name,
     });
     // console.dir(field, {depth: 7});
-    values.push(field.data?.content.fields.value);
+    values.push(field.data?.content.fields);
   }
   // console.log(result);
 

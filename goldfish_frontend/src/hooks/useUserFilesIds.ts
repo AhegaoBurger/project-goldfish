@@ -1,73 +1,89 @@
-// src/hooks/useDynamicFieldValues.ts
+// src/hooks/useUserDynamicFieldValues.ts
 import { useState, useEffect, useCallback } from "react";
-import { useSuiClient } from "@mysten/dapp-kit";
-import type { DynamicFieldInfo, SuiObjectResponse } from "@mysten/sui/client"; // More specific types
+import { useSuiClient, useCurrentAccount } from "@mysten/dapp-kit";
+import type {
+  SuiClient,
+  DynamicFieldInfo,
+  SuiObjectResponse,
+} from "@mysten/sui/client";
 
-// Define the structure of the name from getDynamicFields
-// This might need adjustment based on the actual type of entry.name
-// If entry.name is just a string, this can be simplified.
-// Assuming entry.name is an object like { type: string, value: string } which is common
-// for dynamic field names. If it's directly a string, this can be simpler.
-// For dynamic fields, `name` is usually DynamicFieldName which has `type` and `value`
-// However, getDynamicFieldObject expects the exact `name` object received from getDynamicFields
-type DynamicFieldName = {
-  type: string;
-  value: any; // Can be string, number, object, etc. depending on the field key type
-};
+// Defines the structure of the object found in `field.data.content.fields`
+// Based on your logs: { id: { id: '...' }, name: '0xUSER_ADDRESS', value: ['...'] }
+interface DynamicFieldActualContent {
+  id: { id: string }; // The object ID of the 'id' field within the struct
+  name: string; // This is assumed to be the user's address
+  value: string[]; // The array of string values we want
+  // Add any other fields if they exist within this structure
+}
 
-// Define the expected structure of the dynamic field object's data
-// This is a guess based on `field.data?.content.fields.value`
-interface DynamicFieldObjectData {
+// Defines the expected structure from getDynamicFieldObject's response,
+// focusing on the data path we need.
+interface FetchedDynamicFieldObject {
   data?: {
     content?: {
-      fields?: {
-        value: string[]; // Based on your console output, value is an array of strings
-      };
+      dataType: "moveObject"; // Expecting a Move object
+      fields: DynamicFieldActualContent;
+      hasPublicTransfer: boolean;
+      type: string;
     };
-    // If it's not a Move object but a raw value, it might be under `display`
-    // display?: any; // Alternative path for raw values
+    digest: string;
+    objectId: string;
+    version: string;
+    // Other fields from SuiObjectResponse like error, owner, etc.
   };
-  // Other fields from SuiObjectResponse like error, owner, etc.
+  error?: any; // Capture potential errors from getDynamicFieldObject
 }
 
 // Define the return type of the hook
-export interface UseDynamicFieldValuesState {
-  values: string[][]; // Based on your console output: [ ['id1'], ['id2', 'id3'], ... ]
+export interface UseUserDynamicFieldValuesState {
+  userValues: string[][]; // Array of 'value' arrays specific to the current user
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
 }
 
 // Props for the hook
-export interface UseDynamicFieldValuesProps {
-  parentId: string;
-  // You could add other options here if needed, like initialCursor, pageSize etc.
+export interface UseUserDynamicFieldValuesProps {
+  parentId: string; // The parent object ID whose dynamic fields are being queried
 }
 
-export function useDynamicFieldValues({
+export function useUserDynamicFieldValues({
   parentId,
-}: UseDynamicFieldValuesProps): UseDynamicFieldValuesState {
-  const [values, setValues] = useState<string[][]>([]);
+}: UseUserDynamicFieldValuesProps): UseUserDynamicFieldValuesState {
+  const [userValues, setUserValues] = useState<string[][]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const suiClient = useSuiClient();
+  const currentAccount = useCurrentAccount(); // Get the currently connected account
 
   const fetchData = useCallback(async () => {
+    // Ensure client and parentId are present
     if (!suiClient || !parentId) {
-      setValues([]);
+      setUserValues([]);
       setIsLoading(false);
-      // Optionally set an error if parentId is missing but suiClient is present
-      // setError(parentId ? null : "Parent ID is required");
+      // Optionally set an error or just return if essentials are missing
+      // setError(parentId ? null : "Parent ID is required.");
+      return;
+    }
+
+    // If no account is connected, we can't filter by user.
+    // Decide behavior: show nothing, show all, or show error.
+    // For "only returns values for the currently connected wallet", we show nothing.
+    if (!currentAccount?.address) {
+      setUserValues([]);
+      setIsLoading(false);
+      // Optionally set an error message e.g., "Please connect your wallet."
+      // setError("Please connect your wallet to view your values.");
       return;
     }
 
     setIsLoading(true);
     setError(null);
-    setValues([]); // Clear previous results
+    setUserValues([]); // Clear previous results
 
     try {
-      // 1. Fetch all dynamic field entries (names/identifiers)
+      // 1. Fetch all dynamic field entries (keys/infos)
       const fieldEntries: DynamicFieldInfo[] = [];
       let hasNextPage = true;
       let cursor: string | null = null;
@@ -76,7 +92,7 @@ export function useDynamicFieldValues({
         const dynamicFieldsResponse = await suiClient.getDynamicFields({
           parentId: parentId,
           cursor: cursor,
-          // limit: 50, // Optional: control page size
+          // limit: 50, // Optional: control page size if needed
         });
 
         fieldEntries.push(...dynamicFieldsResponse.data);
@@ -84,80 +100,109 @@ export function useDynamicFieldValues({
         hasNextPage = dynamicFieldsResponse.hasNextPage;
       }
 
-      // 2. Fetch the actual object for each field entry and extract the value
-      const fetchedValues: string[][] = [];
+      // 2. Fetch the actual object for each field entry and filter by user address
+      const filteredUserValues: string[][] = [];
 
       for (const entry of fieldEntries) {
-        // The `name` from `DynamicFieldInfo` is what `getDynamicFieldObject` expects.
-        // It's an object like: { type: "0x...::module::StructName", value: "..." }
-        // or { type: "u64", value: "123" }
+        // `entry.name` is the DynamicFieldName (key) of the dynamic field
         const fieldObjectResponse: SuiObjectResponse =
           await suiClient.getDynamicFieldObject({
             parentId: parentId,
-            name: entry.name, // entry.name is the DynamicFieldName object
+            name: entry.name,
           });
 
-        // Assuming the structure `field.data.content.fields.value`
-        // Adjust this path if your object structure is different
-        const fieldValue = (fieldObjectResponse as DynamicFieldObjectData).data
-          ?.content?.fields?.value;
+        // Type cast for easier access and type safety
+        const fieldObject = fieldObjectResponse as FetchedDynamicFieldObject;
 
-        if (fieldValue && Array.isArray(fieldValue)) {
-          // Ensure all elements in fieldValue are strings, or handle mixed types
-          fetchedValues.push(fieldValue.map((item) => String(item)));
-        } else {
-          // Handle cases where value might be missing or not an array as expected
+        if (fieldObject.error) {
           console.warn(
-            `Value not found or not an array for field:`,
-            entry.name,
-            fieldObjectResponse,
+            `Error fetching dynamic field object for key ${JSON.stringify(entry.name)}:`,
+            fieldObject.error,
           );
-          // Optionally push an empty array or skip
-          // fetchedValues.push([]);
+          continue; // Skip this entry if there was an error fetching it
+        }
+
+        // Check if the data path and the critical `fields` property exist
+        if (
+          fieldObject.data?.content?.dataType === "moveObject" &&
+          fieldObject.data.content.fields
+        ) {
+          const contentFields = fieldObject.data.content.fields;
+
+          // **FILTERING STEP**: Check if the `name` field matches the current user's address
+          if (
+            contentFields.name &&
+            contentFields.name === currentAccount.address
+          ) {
+            // If it matches, and `value` is a valid array, add it to our results
+            if (contentFields.value && Array.isArray(contentFields.value)) {
+              // Ensure all items in the value array are strings
+              filteredUserValues.push(
+                contentFields.value.map((item) => String(item)),
+              );
+            } else {
+              // console.warn(`'value' array missing or not an array for user ${currentAccount.address} in field:`, entry.name);
+              // Decide if an entry for this user with no 'value' items should add an empty array or be skipped.
+              // filteredUserValues.push([]); // Example: Add empty array
+            }
+          }
+        } else {
+          // console.warn(`Unexpected structure or missing content for dynamic field object:`, entry.name, fieldObjectResponse);
         }
       }
-      setValues(fetchedValues);
+      setUserValues(filteredUserValues);
     } catch (err: any) {
-      console.error("Error in useDynamicFieldValues fetchData:", err);
+      console.error("Error in useUserDynamicFieldValues fetchData:", err);
       setError(
         `Failed to fetch dynamic field values: ${err.message || "Unknown error"}`,
       );
-      setValues([]); // Ensure values are cleared on error
+      setUserValues([]); // Ensure values are cleared on error
     } finally {
       setIsLoading(false);
     }
-  }, [suiClient, parentId]); // Dependencies for useCallback
+  }, [suiClient, parentId, currentAccount?.address]); // Dependencies for useCallback
 
   useEffect(() => {
+    // Trigger fetchData when dependencies change.
+    // fetchData itself handles the logic of not running if suiClient, parentId, or currentAccount.address are missing.
     fetchData();
-  }, [fetchData]); // fetchData is memoized by useCallback, so this runs when suiClient or parentId changes
+  }, [fetchData]); // fetchData is memoized and its dependencies are listed above
 
-  return { values, isLoading, error, refetch: fetchData };
+  return { userValues, isLoading, error, refetch: fetchData };
 }
 
-// Example Usage (in a component):
+// Example Usage (in a React component):
 /*
-import { useDynamicFieldValues } from "./hooks/useDynamicFieldValues"; // Adjust path
+import { useUserDynamicFieldValues } from "./hooks/useUserDynamicFieldValues"; // Adjust path as needed
+import { useCurrentAccount } from "@mysten/dapp-kit";
 
 function MyComponent() {
-  const MY_PARENT_OBJECT_ID = "0x9801afde129050adb0573fadfd798fa9733104d4521bb8936991e59a2ad706f0"; // Example
-  const { values, isLoading, error, refetch } = useDynamicFieldValues({ parentId: MY_PARENT_OBJECT_ID });
+  // Replace with your actual parent object ID
+  const PARENT_OBJECT_ID = "0x9801afde129050adb0573fadfd798fa9733104d4521bb8936991e59a2ad706f0";
+  const { userValues, isLoading, error, refetch } = useUserDynamicFieldValues({ parentId: PARENT_OBJECT_ID });
+  const currentAccount = useCurrentAccount();
 
-  if (isLoading) return <p>Loading dynamic field values...</p>;
+  if (!currentAccount?.address) {
+    return <p>Please connect your wallet to see your data.</p>;
+  }
+
+  if (isLoading) return <p>Loading your values...</p>;
   if (error) return <p>Error: {error} <button onClick={refetch}>Retry</button></p>;
 
   return (
     <div>
-      <h2>Dynamic Field Values:</h2>
-      {values.length === 0 && <p>No values found.</p>}
+      <h2>Your Associated Values:</h2>
+      {userValues.length === 0 && <p>No values found for your account.</p>}
       <ul>
-        {values.map((valueArray, index) => (
+        {userValues.map((valueArray, index) => (
           <li key={index}>
             {JSON.stringify(valueArray)}
           </li>
         ))}
       </ul>
-      <button onClick={refetch}>Refresh Data</button>
+      <button onClick={refetch} disabled={isLoading}>
+        {isLoading ? 'Refreshing...' : 'Refresh Data'}
+      </button>
     </div>
   );
 }
