@@ -20,6 +20,8 @@ import {
   Search,
 } from "lucide-react";
 import FileOptions from "./file-options";
+import { TABLE_OBJECT_ID } from "../constants";
+import { useDynamicFieldValues } from "../hooks/useUserFilesIds";
 
 type FileItem = {
   id: string;
@@ -33,6 +35,17 @@ type FileItem = {
 
 export default function FileList() {
   const [searchQuery, setSearchQuery] = useState("");
+  const { values, isLoading, error, refetch } = useDynamicFieldValues({
+    parentId: TABLE_OBJECT_ID,
+  });
+
+  if (isLoading) return <p>Loading dynamic field values...</p>;
+  if (error)
+    return (
+      <p>
+        Error: {error} <button onClick={refetch}>Retry</button>
+      </p>
+    );
 
   // Sample file data
   const files: FileItem[] = [
@@ -214,6 +227,12 @@ export default function FileList() {
                 </div>
               )}
             </div>
+            {values.length === 0 && <p>No values found.</p>}
+            <ul>
+              {values.map((valueArray, index) => (
+                <li key={index}>{JSON.stringify(valueArray)}</li>
+              ))}
+            </ul>
           </TabsContent>
 
           <TabsContent value="recent" className="m-0">

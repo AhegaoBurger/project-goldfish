@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mysten/bcs": "^1.6.1",
     "@mysten/dapp-kit": "^0.16.0",
     "@mysten/sui": "^1.28.2",
     "@mysten/walrus": "^0.0.19",

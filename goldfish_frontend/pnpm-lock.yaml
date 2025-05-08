@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@mysten/bcs':
+        specifier: ^1.6.1
+        version: 1.6.1
       '@mysten/dapp-kit':
         specifier: ^0.16.0
         version: 0.16.0(@tanstack/react-query@5.74.4(react@19.1.0))(@types/react-dom@19.1.2(@types/react@19.1.2))(@types/react@19.1.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(typescript@5.7.3)
@@ -480,6 +483,9 @@ packages:
 
   '@mysten/bcs@1.6.0':
     resolution: {integrity: sha512-ydDRYdIkIFCpHCcPvAkMC91fVwumjzbTgjqds0KsphDQI3jUlH3jFG5lfYNTmV6V3pkhOiRk1fupLBcsQsiszg==}
+
+  '@mysten/bcs@1.6.1':
+    resolution: {integrity: sha512-pywsl2+jxbib5CbteAjMpmJpnj1pcUco2ff+lXCK3hfppPbkyWEMbZDQn1jNngV6ADQ3IFIvPs0FaS7fKWPOLA==}
 
   '@mysten/dapp-kit@0.16.0':
     resolution: {integrity: sha512-ZYuMiCyI4I4AbqqRXQtewdBdT/o/3wMsIU40rS9gYXwzK+L6Dv3xFdV6/4DlxGNgDUgb++4oCCeVIpbWnFToJA==}
@@ -2306,6 +2312,11 @@ snapshots:
 
   '@mysten/bcs@1.6.0':
     dependencies:
+      '@scure/base': 1.2.5
+
+  '@mysten/bcs@1.6.1':
+    dependencies:
+      '@mysten/utils': 0.0.0
       '@scure/base': 1.2.5
 
   '@mysten/dapp-kit@0.16.0(@tanstack/react-query@5.74.4(react@19.1.0))(@types/react-dom@19.1.2(@types/react@19.1.2))(@types/react@19.1.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(typescript@5.7.3)':
