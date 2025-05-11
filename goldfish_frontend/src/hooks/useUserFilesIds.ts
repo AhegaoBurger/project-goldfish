@@ -1,7 +1,10 @@
 // src/hooks/useUserDynamicFieldValues.ts
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSuiClient, useCurrentAccount } from "@mysten/dapp-kit";
 import type { DynamicFieldInfo, SuiObjectResponse } from "@mysten/sui/client";
+import { WalrusClient } from "@mysten/walrus";
+import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url"; // Vite specific import
+import { NETWORK } from "../constants";
 
 // Defines the structure of the object found in `field.data.content.fields`
 // Based on your logs: { id: { id: '...' }, name: '0xUSER_ADDRESS', value: ['...'] }
@@ -38,6 +41,20 @@ export interface UseUserDynamicFieldValuesState {
   refetch: () => void;
 }
 
+// Extended interface to include file data
+interface UserFile {
+  fileId: string;
+  fileData: Uint8Array | null;
+  error?: string;
+}
+
+export interface UseUserFilesState {
+  userFiles: UserFile[];
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
 // Props for the hook
 export interface UseUserDynamicFieldValuesProps {
   parentId: string; // The parent object ID whose dynamic fields are being queried
@@ -52,6 +69,20 @@ export function useUserDynamicFieldValues({
 
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount(); // Get the currently connected account
+
+  // Memoize Walrus Client instance
+  const walrusClient = useMemo(() => {
+    if (!suiClient) return null;
+    // console.log('Initializing WalrusClient with WASM URL:', walrusWasmUrl);
+    return new WalrusClient({
+      suiClient: suiClient,
+      network: NETWORK,
+      wasmUrl: walrusWasmUrl,
+      storageNodeClientOptions: {
+        onError: (error) => console.error("Walrus Node Error:", error),
+      },
+    });
+  }, [suiClient]);
 
   const fetchData = useCallback(async () => {
     // Ensure client and parentId are present
