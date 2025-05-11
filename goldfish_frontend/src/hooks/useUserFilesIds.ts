@@ -1,234 +1,337 @@
-// src/hooks/useUserDynamicFieldValues.ts
-import { useState, useEffect, useCallback, useMemo } from "react";
+// src/hooks/useUserFileContents.ts
+import { useState, useEffect, useCallback } from "react";
 import { useSuiClient, useCurrentAccount } from "@mysten/dapp-kit";
-import type { DynamicFieldInfo, SuiObjectResponse } from "@mysten/sui/client";
+import type {
+  // SuiClient,
+  DynamicFieldInfo,
+  SuiObjectResponse,
+} from "@mysten/sui/client";
 import { WalrusClient } from "@mysten/walrus";
-import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url"; // Vite specific import
-import { NETWORK } from "../constants";
 
-// Defines the structure of the object found in `field.data.content.fields`
-// Based on your logs: { id: { id: '...' }, name: '0xUSER_ADDRESS', value: ['...'] }
+// --- Walrus Client Interface ---
+// You'll need to ensure your actual WalrusClient instance matches this interface
+// or adjust the interface. Import it if it's from a library.
+// export interface WalrusClient {
+//   readBlob(params: { blobId: string }): Promise<Uint8Array>;
+// }
+// Example:
+// import { WalrusClient } from 'your-walrus-sdk'; // Or wherever it comes from
+
+// --- Type Definitions ---
+
+// Structure of the object within field.data.content.fields
 interface DynamicFieldActualContent {
-  id: { id: string }; // The object ID of the 'id' field within the struct
-  name: string; // This is assumed to be the user's address
-  value: string[]; // The array of string values we want
-  // Add any other fields if they exist within this structure
+  id: { id: string };
+  name: string; // Expected to be the user's address
+  value: string[]; // Array of blob IDs
 }
 
-// Defines the expected structure from getDynamicFieldObject's response,
-// focusing on the data path we need.
+// Expected structure from getDynamicFieldObject's response
 interface FetchedDynamicFieldObject {
   data?: {
     content?: {
-      dataType: "moveObject"; // Expecting a Move object
+      dataType: "moveObject";
       fields: DynamicFieldActualContent;
       hasPublicTransfer: boolean;
-      type: string;
+      type: string; // e.g., "0xpackage::module::StructName"
     };
+    // Other fields from SuiObjectResponse
     digest: string;
     objectId: string;
     version: string;
-    // Other fields from SuiObjectResponse like error, owner, etc.
   };
-  error?: any; // Capture potential errors from getDynamicFieldObject
+  error?: any; // Error from getDynamicFieldObject call itself
 }
 
-// Define the return type of the hook
-export interface UseUserDynamicFieldValuesState {
-  userValues: string[][]; // Array of 'value' arrays specific to the current user
-  isLoading: boolean;
-  error: string | null;
-  refetch: () => void;
+// Represents the fetched content (or error) for a single blob
+export interface BlobFetchResult {
+  blobId: string;
+  data: Uint8Array | null; // Uint8Array if successful, null if error
+  error?: string; // Error message if fetching this specific blob failed
 }
 
-// Extended interface to include file data
-interface UserFile {
-  fileId: string;
-  fileData: Uint8Array | null;
-  error?: string;
-}
-
-export interface UseUserFilesState {
-  userFiles: UserFile[];
-  isLoading: boolean;
-  error: string | null;
+// Return type of the hook
+export interface UseUserFileContentsState {
+  // Each inner array corresponds to one 'value' (list of blobIds) from a user-specific dynamic field.
+  // It contains the fetched content for each blobId in that list.
+  userFileGroups: Array<BlobFetchResult[]>;
+  isLoading: boolean; // Overall loading state for the entire fetch process
+  error: string | null; // General error for the hook (e.g., failed to get dynamic fields, major issue)
   refetch: () => void;
 }
 
 // Props for the hook
-export interface UseUserDynamicFieldValuesProps {
-  parentId: string; // The parent object ID whose dynamic fields are being queried
+export interface UseUserFileContentsProps {
+  parentId: string; // Parent object ID for dynamic fields
+  walrusClient: WalrusClient | null; // The Walrus client instance for reading blobs
 }
 
-export function useUserDynamicFieldValues({
+export function useUserFileContents({
   parentId,
-}: UseUserDynamicFieldValuesProps): UseUserDynamicFieldValuesState {
-  const [userValues, setUserValues] = useState<string[][]>([]);
+  walrusClient,
+}: UseUserFileContentsProps): UseUserFileContentsState {
+  const [userFileGroups, setUserFileGroups] = useState<
+    Array<BlobFetchResult[]>
+  >([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const suiClient = useSuiClient();
-  const currentAccount = useCurrentAccount(); // Get the currently connected account
-
-  // Memoize Walrus Client instance
-  const walrusClient = useMemo(() => {
-    if (!suiClient) return null;
-    // console.log('Initializing WalrusClient with WASM URL:', walrusWasmUrl);
-    return new WalrusClient({
-      suiClient: suiClient,
-      network: NETWORK,
-      wasmUrl: walrusWasmUrl,
-      storageNodeClientOptions: {
-        onError: (error) => console.error("Walrus Node Error:", error),
-      },
-    });
-  }, [suiClient]);
+  const currentAccount = useCurrentAccount();
 
   const fetchData = useCallback(async () => {
-    // Ensure client and parentId are present
+    // Initial checks for required dependencies
     if (!suiClient || !parentId) {
-      setUserValues([]);
+      setUserFileGroups([]);
       setIsLoading(false);
-      // Optionally set an error or just return if essentials are missing
-      // setError(parentId ? null : "Parent ID is required.");
+      // setError(parentId ? null : "Parent ID is required."); // Optional: specific error
       return;
     }
-
-    // If no account is connected, we can't filter by user.
-    // Decide behavior: show nothing, show all, or show error.
-    // For "only returns values for the currently connected wallet", we show nothing.
     if (!currentAccount?.address) {
-      setUserValues([]);
+      setUserFileGroups([]);
       setIsLoading(false);
-      // Optionally set an error message e.g., "Please connect your wallet."
-      // setError("Please connect your wallet to view your values.");
+      // setError("Please connect your wallet."); // Optional: specific error
+      return;
+    }
+    if (!walrusClient) {
+      setUserFileGroups([]);
+      setIsLoading(false);
+      setError("Walrus client is not configured or provided.");
       return;
     }
 
     setIsLoading(true);
     setError(null);
-    setUserValues([]); // Clear previous results
+    setUserFileGroups([]);
 
     try {
-      // 1. Fetch all dynamic field entries (keys/infos)
+      // 1. Fetch all dynamic field entries (infos/keys)
       const fieldEntries: DynamicFieldInfo[] = [];
       let hasNextPage = true;
       let cursor: string | null = null;
-
       while (hasNextPage) {
         const dynamicFieldsResponse = await suiClient.getDynamicFields({
           parentId: parentId,
           cursor: cursor,
-          // limit: 50, // Optional: control page size if needed
+          // limit: 50, // Optional: control page size
         });
-
         fieldEntries.push(...dynamicFieldsResponse.data);
         cursor = dynamicFieldsResponse.nextCursor;
         hasNextPage = dynamicFieldsResponse.hasNextPage;
       }
 
-      // 2. Fetch the actual object for each field entry and filter by user address
-      const filteredUserValues: string[][] = [];
+      // 2. For each field entry, create a promise to:
+      //    a. Fetch the full dynamic field object.
+      //    b. Filter if it belongs to the current user.
+      //    c. If yes, extract blob IDs and fetch their content using WalrusClient.
+      const processingPromises: Promise<BlobFetchResult[] | null>[] =
+        fieldEntries.map(
+          (entry) =>
+            (async (): Promise<BlobFetchResult[] | null> => {
+              try {
+                const fieldObjectResponse: SuiObjectResponse =
+                  await suiClient.getDynamicFieldObject({
+                    parentId: parentId,
+                    name: entry.name, // entry.name is the DynamicFieldName
+                  });
 
-      for (const entry of fieldEntries) {
-        // `entry.name` is the DynamicFieldName (key) of the dynamic field
-        const fieldObjectResponse: SuiObjectResponse =
-          await suiClient.getDynamicFieldObject({
-            parentId: parentId,
-            name: entry.name,
-          });
+                const fieldObject =
+                  fieldObjectResponse as FetchedDynamicFieldObject;
 
-        // Type cast for easier access and type safety
-        const fieldObject = fieldObjectResponse as FetchedDynamicFieldObject;
+                if (fieldObject.error) {
+                  console.warn(
+                    `Error fetching dynamic field object for key ${JSON.stringify(entry.name)}:`,
+                    fieldObject.error,
+                  );
+                  return null; // Skip this entry due to fetch error
+                }
 
-        if (fieldObject.error) {
-          console.warn(
-            `Error fetching dynamic field object for key ${JSON.stringify(entry.name)}:`,
-            fieldObject.error,
-          );
-          continue; // Skip this entry if there was an error fetching it
-        }
+                if (
+                  fieldObject.data?.content?.dataType === "moveObject" &&
+                  fieldObject.data.content.fields
+                ) {
+                  const contentFields = fieldObject.data.content.fields;
 
-        // Check if the data path and the critical `fields` property exist
-        if (
-          fieldObject.data?.content?.dataType === "moveObject" &&
-          fieldObject.data.content.fields
-        ) {
-          const contentFields = fieldObject.data.content.fields;
+                  // Filter: Check if this dynamic field's 'name' matches the current user's address
+                  if (
+                    contentFields.name &&
+                    contentFields.name === currentAccount.address
+                  ) {
+                    if (
+                      contentFields.value &&
+                      Array.isArray(contentFields.value)
+                    ) {
+                      const blobIds: string[] = contentFields.value.map((id) =>
+                        String(id),
+                      );
 
-          // **FILTERING STEP**: Check if the `name` field matches the current user's address
-          if (
-            contentFields.name &&
-            contentFields.name === currentAccount.address
-          ) {
-            // If it matches, and `value` is a valid array, add it to our results
-            if (contentFields.value && Array.isArray(contentFields.value)) {
-              // Ensure all items in the value array are strings
-              filteredUserValues.push(
-                contentFields.value.map((item) => String(item)),
-              );
-            } else {
-              // console.warn(`'value' array missing or not an array for user ${currentAccount.address} in field:`, entry.name);
-              // Decide if an entry for this user with no 'value' items should add an empty array or be skipped.
-              // filteredUserValues.push([]); // Example: Add empty array
-            }
-          }
-        } else {
-          // console.warn(`Unexpected structure or missing content for dynamic field object:`, entry.name, fieldObjectResponse);
-        }
-      }
-      setUserValues(filteredUserValues);
+                      if (blobIds.length === 0) {
+                        return []; // User's entry, but no blob IDs in its 'value' array
+                      }
+
+                      // Fetch all blobs for this group of IDs
+                      const blobFetchResultsPromises = blobIds.map(
+                        async (blobId) => {
+                          try {
+                            // walrusClient is guaranteed to be non-null here due to the initial check
+                            const blobData = await walrusClient!.readBlob({
+                              blobId,
+                            });
+                            console.log("we got blob data", blobData);
+                            console.log(
+                              "readble: ",
+                              blobData.buffer as ArrayBuffer,
+                            );
+                            return { blobId, data: blobData, error: undefined };
+                          } catch (blobError: any) {
+                            console.error(
+                              `Failed to read blob ${blobId}:`,
+                              blobError,
+                            );
+                            return {
+                              blobId,
+                              data: null,
+                              error:
+                                blobError instanceof Error
+                                  ? blobError.message
+                                  : String(blobError),
+                            };
+                          }
+                        },
+                      );
+                      return Promise.all(blobFetchResultsPromises); // Returns BlobFetchResult[]
+                    } else {
+                      // User's entry, but 'value' is missing, not an array, or malformed
+                      return []; // Represent as an empty group of blobs
+                    }
+                  } else {
+                    return null; // Not for the current user, skip
+                  }
+                } else {
+                  // Dynamic field object structure wasn't as expected
+                  console.warn(
+                    `Unexpected structure or missing content for dynamic field object:`,
+                    entry.name,
+                    fieldObjectResponse,
+                  );
+                  return null; // Skip due to unexpected structure
+                }
+              } catch (processEntryError: any) {
+                // Catch errors during the processing of a single entry (e.g., unexpected issues)
+                console.error(
+                  `Error processing entry ${JSON.stringify(entry.name)}:`,
+                  processEntryError,
+                );
+                return null; // Indicate failure for this entry, effectively skipping it
+              }
+            })(), // Immediately Invoked Function Expression (IIFE) to create and start the promise
+        );
+
+      // Wait for all processing promises (each handling one dynamic field entry) to settle
+      const settledResults = await Promise.all(processingPromises);
+
+      // Filter out nulls (entries that were skipped, not for the user, or had errors)
+      // and type assert correctly.
+      const finalUserFileGroups = settledResults.filter(
+        (group) => group !== null,
+      ) as Array<BlobFetchResult[]>;
+      setUserFileGroups(finalUserFileGroups);
     } catch (err: any) {
-      console.error("Error in useUserDynamicFieldValues fetchData:", err);
+      // Catch major errors in the overall fetchData logic (e.g., getDynamicFields failing completely)
+      console.error("Error in useUserFileContents fetchData:", err);
       setError(
-        `Failed to fetch dynamic field values: ${err.message || "Unknown error"}`,
+        `Failed to fetch file contents: ${err.message || "Unknown error"}`,
       );
-      setUserValues([]); // Ensure values are cleared on error
+      setUserFileGroups([]); // Ensure state is cleared on major error
     } finally {
       setIsLoading(false);
     }
-  }, [suiClient, parentId, currentAccount?.address]); // Dependencies for useCallback
+  }, [suiClient, parentId, currentAccount?.address, walrusClient]); // Dependencies for useCallback
 
   useEffect(() => {
-    // Trigger fetchData when dependencies change.
-    // fetchData itself handles the logic of not running if suiClient, parentId, or currentAccount.address are missing.
-    fetchData();
-  }, [fetchData]); // fetchData is memoized and its dependencies are listed above
+    fetchData(); // Call fetchData when dependencies change
+  }, [fetchData]); // fetchData is memoized by useCallback
 
-  return { userValues, isLoading, error, refetch: fetchData };
+  return { userFileGroups, isLoading, error, refetch: fetchData };
 }
 
 // Example Usage (in a React component):
 /*
-import { useUserDynamicFieldValues } from "./hooks/useUserDynamicFieldValues"; // Adjust path as needed
+import { useUserFileContents, WalrusClient } from "./hooks/useUserFileContents"; // Adjust path
 import { useCurrentAccount } from "@mysten/dapp-kit";
+import { SomeWalrusClientImplementation } from 'your-walrus-library'; // Your actual client
 
-function MyComponent() {
-  // Replace with your actual parent object ID
-  const PARENT_OBJECT_ID = "0x9801afde129050adb0573fadfd798fa9733104d4521bb8936991e59a2ad706f0";
-  const { userValues, isLoading, error, refetch } = useUserDynamicFieldValues({ parentId: PARENT_OBJECT_ID });
+function MyFilesDisplay() {
+  const PARENT_OBJECT_ID = "0x9801afde129050adb0573fadfd798fa9733104d4521bb8936991e59a2ad706f0"; // Your parent ID
   const currentAccount = useCurrentAccount();
 
+  // Instantiate or get your WalrusClient. This might come from a context, props, or be created here.
+  // For this example, let's assume you instantiate it.
+  // Ensure it's memoized if created directly in the component to prevent re-renders of the hook.
+  const walrusClientInstance: WalrusClient | null = useMemo(() => {
+    // Replace with your actual WalrusClient setup
+    // This is just a placeholder:
+    if (typeof SomeWalrusClientImplementation !== 'undefined') {
+        return new SomeWalrusClientImplementation({ rpcUrl: "your_rpc_url_if_needed" });
+    }
+    return null;
+  }, []);
+
+
+  const { userFileGroups, isLoading, error, refetch } = useUserFileContents({
+    parentId: PARENT_OBJECT_ID,
+    walrusClient: walrusClientInstance,
+  });
+
   if (!currentAccount?.address) {
-    return <p>Please connect your wallet to see your data.</p>;
+    return <p>Please connect your wallet.</p>;
+  }
+  if (!walrusClientInstance) {
+      return <p>File service client is not available.</p>
   }
 
-  if (isLoading) return <p>Loading your values...</p>;
-  if (error) return <p>Error: {error} <button onClick={refetch}>Retry</button></p>;
+  if (isLoading) return <p>Loading your file contents...</p>;
+  if (error) return <p>Error loading files: {error} <button onClick={refetch}>Retry</button></p>;
+
+  // Helper to convert Uint8Array to a string for display (example)
+  const uint8ArrayToString = (arr: Uint8Array | null) => {
+    if (!arr) return "No data";
+    try {
+      return new TextDecoder().decode(arr);
+    } catch (e) {
+      return "Binary data (cannot display as text)";
+    }
+  };
 
   return (
     <div>
-      <h2>Your Associated Values:</h2>
-      {userValues.length === 0 && <p>No values found for your account.</p>}
-      <ul>
-        {userValues.map((valueArray, index) => (
-          <li key={index}>
-            {JSON.stringify(valueArray)}
-          </li>
-        ))}
-      </ul>
+      <h2>Your Files:</h2>
+      {userFileGroups.length === 0 && <p>No files found for your account or all groups were empty.</p>}
+      {userFileGroups.map((fileGroup, groupIndex) => (
+        <div key={groupIndex} style={{ marginBottom: '20px', border: '1px solid #ccc', padding: '10px' }}>
+          <h3>File Group {groupIndex + 1} (from one dynamic field)</h3>
+          {fileGroup.length === 0 && <p>This group is empty.</p>}
+          <ul>
+            {fileGroup.map((fileResult, fileIndex) => (
+              <li key={`${groupIndex}-${fileResult.blobId}-${fileIndex}`}>
+                <strong>Blob ID:</strong> {fileResult.blobId}
+                <br />
+                {fileResult.error ? (
+                  <span style={{ color: 'red' }}>Error: {fileResult.error}</span>
+                ) : (
+                  <>
+                    <strong>Content (first 100 chars):</strong>
+                    <pre>{uint8ArrayToString(fileResult.data)?.substring(0,100) || "Empty content"}</pre>
+                    {fileResult.data && <p>(Size: {fileResult.data.byteLength} bytes)</p>}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
       <button onClick={refetch} disabled={isLoading}>
-        {isLoading ? 'Refreshing...' : 'Refresh Data'}
+        {isLoading ? 'Refreshing...' : 'Refresh File Contents'}
       </button>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,8 +20,12 @@ import {
   Search,
 } from "lucide-react";
 import FileOptions from "./file-options";
-import { TABLE_OBJECT_ID } from "../constants";
-import { useUserDynamicFieldValues } from "../hooks/useUserFilesIds";
+import { WalrusClient } from "@mysten/walrus";
+import { useSuiClient } from "@mysten/dapp-kit";
+import { NETWORK, TABLE_OBJECT_ID } from "../constants";
+import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url";
+import { useUserFileContents } from "../hooks/useUserFilesIds";
+import { uint8ArrayToString } from "../lib/fileHelpers";
 
 type FileItem = {
   id: string;
@@ -35,8 +39,25 @@ type FileItem = {
 
 export default function FileList() {
   const [searchQuery, setSearchQuery] = useState("");
-  const { userValues, isLoading, error, refetch } = useUserDynamicFieldValues({
+  const suiClient = useSuiClient(); // Use the client from dapp-kit provider
+
+  // Memoize Walrus Client instance
+  const walrusClient = useMemo(() => {
+    if (!suiClient) return null;
+    // console.log('Initializing WalrusClient with WASM URL:', walrusWasmUrl);
+    return new WalrusClient({
+      suiClient: suiClient,
+      network: NETWORK,
+      wasmUrl: walrusWasmUrl,
+      storageNodeClientOptions: {
+        onError: (error) => console.error("Walrus Node Error:", error),
+      },
+    });
+  }, [suiClient]);
+
+  const { userFileGroups, isLoading, error, refetch } = useUserFileContents({
     parentId: TABLE_OBJECT_ID,
+    walrusClient,
   });
 
   if (isLoading) return <p>Loading dynamic field values...</p>;
@@ -227,14 +248,45 @@ export default function FileList() {
                 </div>
               )}
             </div>
-            {userValues.length === 0 && (
-              <p>No values found for your account.</p>
-            )}
-            <ul>
-              {userValues.map((valueArray, index) => (
-                <li key={index}>{JSON.stringify(valueArray)}</li>
-              ))}
-            </ul>
+            {userFileGroups.map((fileGroup, groupIndex) => (
+              <div
+                key={groupIndex}
+                style={{
+                  marginBottom: "20px",
+                  border: "1px solid #ccc",
+                  padding: "10px",
+                }}
+              >
+                <h3>File Group {groupIndex + 1} (from one dynamic field)</h3>
+                {fileGroup.length === 0 && <p>This group is empty.</p>}
+                <ul>
+                  {fileGroup.map((fileResult, fileIndex) => (
+                    <li key={`${groupIndex}-${fileResult.blobId}-${fileIndex}`}>
+                      <strong>Blob ID:</strong> {fileResult.blobId}
+                      <br />
+                      {fileResult.error ? (
+                        <span style={{ color: "red" }}>
+                          Error: {fileResult.error}
+                        </span>
+                      ) : (
+                        <>
+                          <strong>Content (first 100 chars):</strong>
+                          <pre>
+                            {uint8ArrayToString(fileResult.data)?.substring(
+                              0,
+                              100,
+                            ) || "Empty content"}
+                          </pre>
+                          {fileResult.data && (
+                            <p>(Size: {fileResult.data.byteLength} bytes)</p>
+                          )}
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </TabsContent>
 
           <TabsContent value="recent" className="m-0">
