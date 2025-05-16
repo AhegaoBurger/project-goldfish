@@ -1,12 +1,12 @@
 // src/hooks/useUserFileContents.ts
 import { useState, useEffect, useCallback } from "react";
-import { useSuiClient, useCurrentAccount } from "@mysten/dapp-kit";
+import { useSuiClient, useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import type {
   // SuiClient,
   DynamicFieldInfo,
   SuiObjectResponse,
 } from "@mysten/sui/client";
-import { WalrusClient } from "@mysten/walrus";
+import { WalrusClient, BlobNotCertifiedError } from "@mysten/walrus";
 
 // --- Walrus Client Interface ---
 // You'll need to ensure your actual WalrusClient instance matches this interface
@@ -78,6 +78,27 @@ export function useUserFileContents({
 
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+
+  // Helper function to get blob status and attempt certification if needed
+  const getVerifiedBlobStatus = useCallback(
+    async (blobId: string): Promise<boolean> => {
+      if (!walrusClient) return false;
+
+      try {
+        // First check the blob status
+        const status = await walrusClient.getVerifiedBlobStatus({ blobId });
+        console.log(`Blob ${blobId} status:`, status);
+        
+        // If the blob exists and is verified, we're good
+        return true;
+      } catch (err) {
+        console.warn(`Error getting blob status for ${blobId}:`, err);
+        return false;
+      }
+    },
+    [walrusClient]
+  );
 
   const fetchData = useCallback(async () => {
     // Initial checks for required dependencies
@@ -173,19 +194,36 @@ export function useUserFileContents({
                       const blobFetchResultsPromises = blobIds.map(
                         async (blobId) => {
                           try {
-                            // walrusClient is guaranteed to be non-null here due to the initial check
-                            const blobData = await walrusClient!.readBlob({
-                              blobId,
-                            });
-                            console.log("we got blob data", blobData);
-                            console.log(
-                              "readble: ",
-                              blobData.buffer as ArrayBuffer,
-                            );
-                            return { blobId, data: blobData, error: undefined };
+                            // First check blob status
+                            await getVerifiedBlobStatus(blobId);
+                            
+                            // Try to read the blob
+                            try {
+                              const blobData = await walrusClient!.readBlob({
+                                blobId,
+                              });
+                              console.log("we got blob data", blobData);
+                              console.log(
+                                "readable: ",
+                                blobData.buffer as ArrayBuffer,
+                              );
+                              return { blobId, data: blobData, error: undefined };
+                            } catch (readError) {
+                              // If the blob is not certified, we'll get a specific error
+                              if (readError instanceof BlobNotCertifiedError) {
+                                console.log(`Blob ${blobId} is not certified. Cannot read without certification.`);
+                              }
+                              return {
+                                blobId,
+                                data: null,
+                                error: readError instanceof Error
+                                  ? readError.message
+                                  : String(readError),
+                              };
+                            }
                           } catch (blobError: any) {
                             console.error(
-                              `Failed to read blob ${blobId}:`,
+                              `Failed to process blob ${blobId}:`,
                               blobError,
                             );
                             return {
@@ -246,7 +284,7 @@ export function useUserFileContents({
     } finally {
       setIsLoading(false);
     }
-  }, [suiClient, parentId, currentAccount?.address, walrusClient]); // Dependencies for useCallback
+  }, [suiClient, parentId, currentAccount?.address, walrusClient, getVerifiedBlobStatus, signAndExecute]); // Dependencies for useCallback
 
   useEffect(() => {
     fetchData(); // Call fetchData when dependencies change

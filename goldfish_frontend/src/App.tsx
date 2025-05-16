@@ -1,6 +1,6 @@
 import Header from "@/components/header";
 import FileUpload from "@/components/file-upload";
-import FileList from "@/components/file-list-demo";
+import FileList from "@/components/file-list";
 import StorageInfo from "@/components/storage-info";
 
 function App() {
