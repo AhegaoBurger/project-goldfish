@@ -5,23 +5,29 @@ system, using Walrus storage on the Sui blockchain.
 
 ## Setup
 
-1. Create a virtual environment (recommended):
+1. Install `uv` (if not already installed):
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# MacOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-2. Install dependencies:
+2. Create and set up the environment:
 
 ```bash
-pip install .
-```
+# Create a new directory for our project
+uv init goldfish_mcp
+cd goldfish_mcp
 
-Or for development:
+# Create virtual environment and activate it
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-```bash
-pip install -e ".[dev]"
+# Install dependencies
+uv pip install -e .
 ```
 
 ## Running the Server
@@ -67,6 +73,14 @@ The server uses the following configuration:
   `0xa2b58dd03872c5bd0f337b13056eb50f9160848329efd9ad965f63e8aac1bc67`
 - Table Object ID:
   `0x9801afde129050adb0573fadfd798fa9733104d4521bb8936991e59a2ad706f0`
+
+## Development
+
+For development work:
+
+```bash
+uv pip install -e ".[dev]"
+```
 
 ## Production Considerations
 
