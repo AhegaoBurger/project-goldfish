@@ -1,336 +1,568 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Server as McpServerRaw } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { getFullnodeUrl, SuiClient } from "@mysten/sui/client";
-import { WalrusClient } from "@mysten/walrus";
-import { z } from "zod";
+import {
+  CallToolRequestSchema,
+  ListResourcesRequestSchema,
+  ListToolsRequestSchema,
+  ReadResourceRequestSchema,
+  Tool,
+  Resource as McpResource,
+  ResourceContents as McpResourceContent,
+  CallToolResult,
+  TextContent,
+  // Make sure these types are correctly imported or defined if not directly from SDK
+  // ListResourcesResult, ReadResourceResult, ListToolsResult,
+} from "@modelcontextprotocol/sdk/types.js";
 
-// Constants from frontend
-const GOLDFISH_PACKAGE_ID = "0xd7da3d972c99d9318eb56df786b8b04e120a7769d572f537d920f40334388dd6";
-const FILE_REGISTRY_OBJECT_ID = "0xa2b58dd03872c5bd0f337b13056eb50f9160848329efd9ad965f63e8aac1bc67";
-const TABLE_OBJECT_ID = "0x9801afde129050adb0573fadfd798fa9733104d4521bb8936991e59a2ad706f0";
+import {
+  getFullnodeUrl,
+  SuiClient,
+  SuiObjectResponse,
+} from "@mysten/sui/client";
+import { Transaction } from "@mysten/sui/transactions"; // Corrected import
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { WalrusClient, BlobNotCertifiedError } from "@mysten/walrus";
+import { Buffer } from "node:buffer";
+
+// --- Configuration Interface ---
+interface GoldfishConfig {
+  walletAddress: string;
+  serverPrivateKeyHex?: string; // Optional, but needed for signing Sui transactions
+}
+
+// --- Constants ---
+const GOLDFISH_PACKAGE_ID =
+  "0xd7da3d972c99d9318eb56df786b8b04e120a7769d572f537d920f40334388dd6";
+const FILE_REGISTRY_OBJECT_ID = // Used in the 'add_file_id' move call
+  "0xa2b58dd03872c5bd0f337b13056eb50f9160848329efd9ad965f63e8aac1bc67";
+const TABLE_OBJECT_ID = // Parent object for dynamic fields containing user's blob_ids
+  "0x9801afde129050adb0573fadfd798fa9733104d4521bb8936991e59a2ad706f0";
 const FILE_REGISTRY_MODULE_NAME = "goldfish_backend";
 const NETWORK = "testnet";
+const GOLDFISH_URI_SCHEME = "goldfish";
 
-// Initialize Sui and Walrus clients
+let config: GoldfishConfig;
+let serverKeypair: Ed25519Keypair | undefined;
+
+// --- Client Initializations ---
 const suiClient = new SuiClient({
   url: getFullnodeUrl(NETWORK),
 });
 
 const walrusClient = new WalrusClient({
   network: NETWORK,
-  suiClient: suiClient, // Type cast to avoid version mismatch
-  wasmUrl: "https://unpkg.com/@mysten/walrus-wasm@0.0.6/web/walrus_wasm_bg.wasm",
+  suiClient,
+  wasmUrl:
+    "https://unpkg.com/@mysten/walrus-wasm@0.0.6/web/walrus_wasm_bg.wasm",
   storageNodeClientOptions: {
     timeout: 60_000,
     onError: (error) => console.error("Walrus Node Error:", error),
   },
 });
 
-// Create server instance
-const server = new McpServer({
-  name: "goldfish",
-  version: "1.0.0",
-  capabilities: {
-    resources: {},
-    tools: {},
-  },
-});
-
-// Get all files for owner
-server.tool(
-  "get_all_files",
-  "Get information about all stored files for a specific owner",
+// --- MCP Server Instance ---
+const server = new McpServerRaw(
   {
-    owner_address: z.string().describe("The Sui address of the file owner"),
+    name: "goldfish",
+    version: "1.0.0",
   },
-  async ({ owner_address }: { owner_address: string }) => {
+  {
+    capabilities: {
+      resources: { listChanged: false, subscribe: false }, // Enable resource capabilities
+      tools: { listChanged: false },
+    },
+  },
+);
+
+// --- Helper: Sui Transaction Execution ---
+async function executeSuiTransaction(transaction: Transaction) {
+  if (!serverKeypair) {
+    throw new Error(
+      "Server private key not configured. Cannot sign Sui transactions.",
+    );
+  }
+  transaction.setSender(config.walletAddress); // Ensure sender is set
+  return suiClient.signAndExecuteTransaction({
+    transaction: transaction,
+    signer: serverKeypair,
+    options: { showObjectChanges: true, showEffects: true, showEvents: true },
+  });
+}
+
+// --- Resource Handlers ---
+
+// Expected structure from getDynamicFieldObject's response based on frontend hook
+interface DynamicFieldSuiObjectContent {
+  id: { id: string };
+  name: string; // Expected to be the user's address (config.walletAddress)
+  value: string[]; // Array of blob IDs
+}
+
+server.setRequestHandler(
+  ListResourcesRequestSchema,
+  async (
+    request,
+  ): Promise<{ resources: McpResource[]; nextCursor?: string }> => {
+    console.error(`[Resources/List] For wallet: ${config.walletAddress}`);
+    const userBlobIds: string[] = [];
+
     try {
-      // Get blob type to verify connection
-      const blobType = await walrusClient.getBlobType();
-      console.log("Blob type:", blobType);
+      let hasNextPage = true;
+      let cursor: string | null = null;
+      console.error(
+        `[Resources/List] Fetching dynamic fields for parentId: ${TABLE_OBJECT_ID}`,
+      );
 
-      // Get storage confirmations from multiple nodes
-      const MAX_NODES = 3;
-      const files = [];
+      while (hasNextPage) {
+        const dynamicFieldsResponse = await suiClient.getDynamicFields({
+          parentId: TABLE_OBJECT_ID,
+          cursor: cursor,
+          limit: 50, // Adjust limit as needed
+        });
 
-      for (let nodeIndex = 0; nodeIndex < MAX_NODES; nodeIndex++) {
-        try {
-          const confirmation = await walrusClient.getStorageConfirmationFromNode({
-            nodeIndex,
-            blobId: TABLE_OBJECT_ID,
-            deletable: true,
-            objectId: FILE_REGISTRY_OBJECT_ID,
-          });
+        console.error(
+          `[Resources/List] Fetched ${dynamicFieldsResponse.data.length} dynamic field infos.`,
+        );
 
-          if (confirmation) {
-            const metadata = await walrusClient.getBlobMetadata({
-              blobId: TABLE_OBJECT_ID,
-            });
-            files.push(metadata);
+        for (const fieldInfo of dynamicFieldsResponse.data) {
+          // The name of the dynamic field for this table structure is an address.
+          // We need to ensure it's the type that matches our user's address.
+          // Type from fieldInfo.name.type should be 'address' or match expected structure.
+          // The actual address is in fieldInfo.name.value
+          if (
+            typeof fieldInfo.name.value === "string" &&
+            fieldInfo.name.value.toLowerCase() ===
+              config.walletAddress.toLowerCase()
+          ) {
+            console.error(
+              `[Resources/List] Found dynamic field for user: ${fieldInfo.name.value}`,
+            );
+            const fieldObjectResponse: SuiObjectResponse =
+              await suiClient.getDynamicFieldObject({
+                parentId: TABLE_OBJECT_ID,
+                name: fieldInfo.name,
+              });
+
+            if (fieldObjectResponse.data?.content?.dataType === "moveObject") {
+              const fieldsData = fieldObjectResponse.data.content.fields as {
+                id: { id: string };
+                name: string;
+                value: string[];
+              };
+
+              const idFromFields = fieldsData?.id;
+              const nameFromFields = fieldsData?.name;
+              const valueFromFields = fieldsData?.value;
+
+              if (
+                idFromFields &&
+                typeof idFromFields.id === "string" &&
+                typeof nameFromFields === "string" && // Should match config.walletAddress
+                Array.isArray(valueFromFields) &&
+                valueFromFields.every((item) => typeof item === "string")
+              ) {
+                // No need to construct DynamicFieldSuiObjectContent if only 'value' is needed
+                userBlobIds.push(...valueFromFields);
+                console.error(
+                  `[Resources/List] Added ${valueFromFields.length} blob IDs from dynamic field owned by ${nameFromFields}.`,
+                );
+              } else {
+                console.warn(
+                  `[Resources/List] Dynamic field for user ${config.walletAddress} (key: ${fieldInfo.name.value}) has unexpected structure in 'fields':`,
+                  fieldsData,
+                );
+              }
+            }
           }
-        } catch (error) {
-          console.warn(`Node ${nodeIndex} error:`, error);
         }
+        cursor = dynamicFieldsResponse.nextCursor;
+        hasNextPage = dynamicFieldsResponse.hasNextPage;
+        if (hasNextPage)
+          console.error(
+            `[Resources/List] Fetching next page with cursor: ${cursor}`,
+          );
       }
+      console.error(
+        `[Resources/List] Total blob IDs found for user: ${userBlobIds.length}`,
+      );
 
-      return {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify(files, null, 2),
-        }],
-      };
+      const resources: McpResource[] = userBlobIds.map((blobId) => ({
+        uri: `${GOLDFISH_URI_SCHEME}://blob/${blobId}`,
+        name: `Goldfish File ${blobId.substring(0, 8)}...`, // Or fetch actual filename if stored
+        description: `Stored file with Blob ID: ${blobId}`,
+        mimeType: "application/octet-stream", // Ideally, fetch metadata for a more accurate type
+      }));
+
+      return { resources };
     } catch (error) {
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Failed to get files: ${error}`,
-        }],
-      };
+      console.error(`[Resources/List] Error fetching resources:`, error);
+      // Return empty or throw, depending on desired behavior for partial failures
+      return { resources: [] };
     }
-  }
+  },
 );
 
-// Get specific file
-server.tool(
-  "get_file",
-  "Get information about a specific file",
-  {
-    file_id: z.string().describe("The ID of the file to retrieve"),
-    owner_address: z.string().describe("The Sui address of the file owner"),
-  },
-  async ({ file_id, owner_address }: { file_id: string; owner_address: string }) => {
-    try {
-      // Get blob metadata
-      const metadata = await walrusClient.getBlobMetadata({
-        blobId: file_id,
-      });
+server.setRequestHandler(
+  ReadResourceRequestSchema,
+  async (request): Promise<{ contents: McpResourceContent[] }> => {
+    const uri = request.params.uri;
+    console.error(`[Resources/Read] URI: ${uri}`);
+    const parsedUrl = new URL(uri);
+    const parts = parsedUrl.pathname.substring(1).split("/"); // e.g., blob/0x123...
 
-      return {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify(metadata, null, 2),
-        }],
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Failed to get file: ${error}`,
-        }],
-      };
+    if (
+      parsedUrl.protocol.replace(":", "") !== GOLDFISH_URI_SCHEME ||
+      parts[0] !== "blob" ||
+      !parts[1]
+    ) {
+      throw new Error(`Invalid Goldfish resource URI format: ${uri}`);
     }
-  }
-);
 
-// Get blob content
-server.tool(
-  "get_blob_content",
-  "Get the content of a specific blob",
-  {
-    blob_id: z.string().describe("The ID of the blob to retrieve"),
-    owner_address: z.string().describe("The Sui address of the file owner"),
-  },
-  async ({ blob_id, owner_address }: { blob_id: string; owner_address: string }) => {
+    const blobId = parts[1];
+    const contents: McpResourceContent[] = [];
+
     try {
-      // Get blob content
-      const content = await walrusClient.readBlob({
-        blobId: blob_id,
-      });
+      // 1. Fetch Metadata
+      console.error(`[Resources/Read] Fetching metadata for blob: ${blobId}`);
+      const metadata = await walrusClient.getBlobMetadata({ blobId });
+      contents.push({
+        uri: `${GOLDFISH_URI_SCHEME}://blob/${blobId}?type=metadata`, // Specific URI for metadata part
+        mimeType: "application/json",
+        text: JSON.stringify(metadata, null, 2),
+      } as McpResourceContent);
+      console.error(`[Resources/Read] Fetched metadata successfully.`);
 
-      return {
-        content: [{
-          type: "text" as const,
-          text: new TextDecoder().decode(content),
-        }],
-      };
+      // 2. Fetch Content
+      console.error(`[Resources/Read] Fetching content for blob: ${blobId}`);
+      const contentBytes = await walrusClient.readBlob({ blobId });
+      console.error(
+        `[Resources/Read] Fetched content successfully (${contentBytes.byteLength} bytes).`,
+      );
+      try {
+        const textContent = new TextDecoder("utf-8", { fatal: true }).decode(
+          contentBytes,
+        );
+        contents.push({
+          uri: `${GOLDFISH_URI_SCHEME}://blob/${blobId}?type=content`, // Specific URI for content part
+          mimeType: metadata.mimeType || "text/plain", // Use metadata mime if available
+          text: textContent,
+        } as McpResourceContent);
+      } catch (e) {
+        // Not valid UTF-8, treat as binary
+        contents.push({
+          uri: `${GOLDFISH_URI_SCHEME}://blob/${blobId}?type=content`,
+          mimeType: metadata.mimeType || "application/octet-stream",
+          blob: Buffer.from(contentBytes).toString("base64"),
+        } as McpResourceContent);
+      }
+      return { contents };
     } catch (error) {
-      if (error instanceof Error && error.name === "BlobNotCertifiedError") {
+      console.error(`[Resources/Read] Error reading blob ${blobId}:`, error);
+      if (error instanceof BlobNotCertifiedError) {
         return {
-          content: [{
-            type: "text" as const,
-            text: "Blob is not certified yet. Please wait for certification.",
-          }],
+          contents: [
+            {
+              uri, // Original URI for context
+              mimeType: "application/json", // Error message
+              text: JSON.stringify({
+                error: "BlobNotCertifiedError",
+                message:
+                  "Blob is not certified yet. Please wait for certification.",
+              }),
+            } as McpResourceContent,
+          ],
         };
       }
-
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Failed to get blob content: ${error}`,
-        }],
-      };
+      // For other errors, let the MCP framework handle it by re-throwing
+      throw new Error(
+        `Failed to read resource ${uri}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
-  }
+  },
 );
 
-// Upload file
-server.tool(
-  "upload_file",
-  "Upload a single file to Walrus storage",
-  {
-    filename: z.string().describe("Name of the file being uploaded"),
-    content: z.string().describe("Base64 encoded content of the file"),
-    owner_address: z.string().describe("The Sui address of the file owner"),
-    storage_epochs: z.number().optional().describe("Number of epochs to store the file (default: 3)"),
+// --- Tool Definitions and Handlers ---
+const UPLOAD_FILE_TOOL_DEF: Tool = {
+  name: "upload_goldfish_file", // Renamed for clarity
+  description:
+    "Upload a single file to Goldfish storage for the configured wallet address.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      filename: {
+        type: "string",
+        description: "Name of the file being uploaded",
+      },
+      content_base64: {
+        type: "string",
+        description: "Base64 encoded content of the file",
+      },
+      storage_epochs: {
+        type: "number",
+        description: "Number of epochs to store the file (default: 3)",
+      },
+    },
+    required: ["filename", "content_base64"],
   },
-  async ({ filename, content, owner_address, storage_epochs = 3 }: { 
-    filename: string;
-    content: string;
-    owner_address: string;
-    storage_epochs?: number;
-  }) => {
+};
+
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      UPLOAD_FILE_TOOL_DEF /*, Add UPLOAD_FILES_TOOL_DEF if implemented */,
+    ],
+  };
+});
+
+server.setRequestHandler(
+  CallToolRequestSchema,
+  async (request): Promise<CallToolResult> => {
+    const { name, arguments: args } = request.params;
+    const toolArgs = args as any;
+    console.error(
+      `[Tool/${name}] Called with args:`,
+      toolArgs ? JSON.stringify(toolArgs).substring(0, 100) + "..." : "No args",
+    );
+
+    if (!serverKeypair) {
+      const errMsg =
+        "Server private key not configured. Cannot execute tools requiring Sui transactions.";
+      console.error(`[Tool/${name}] Error: ${errMsg}`);
+      return {
+        content: [{ type: "text", text: errMsg } as TextContent],
+        isError: true,
+      };
+    }
+
     try {
-      const fileContent = new Uint8Array(Buffer.from(content, 'base64'));
-      
-      // Encode blob
-      const encoded = await walrusClient.encodeBlob(fileContent);
+      switch (name) {
+        case UPLOAD_FILE_TOOL_DEF.name: {
+          const {
+            filename,
+            content_base64,
+            storage_epochs = 3,
+          } = toolArgs as {
+            filename: string;
+            content_base64: string;
+            storage_epochs?: number;
+          };
 
-      // Register blob transaction
-      const registerBlobTransaction = await walrusClient.registerBlobTransaction({
-        blobId: encoded.blobId,
-        rootHash: encoded.rootHash,
-        size: fileContent.length,
-        deletable: true,
-        epochs: storage_epochs,
-        owner: owner_address,
-      });
+          console.error(`[Tool/${name}] Processing file: ${filename}`);
+          const fileContent = new Uint8Array(
+            Buffer.from(content_base64, "base64"),
+          );
 
-      // Write encoded blob to nodes
-      const confirmations = await walrusClient.writeEncodedBlobToNodes({
-        blobId: encoded.blobId,
-        metadata: encoded.metadata,
-        sliversByNode: encoded.sliversByNode,
-        deletable: true,
-        objectId: FILE_REGISTRY_OBJECT_ID,
-      });
+          // 1. Walrus: Encode
+          console.error(`[Tool/${name}] Encoding blob...`);
+          const encoded = await walrusClient.encodeBlob(fileContent);
+          console.error(`[Tool/${name}] Encoded blobId: ${encoded.blobId}`);
 
-      // Certify blob
-      const certifyBlobTransaction = await walrusClient.certifyBlobTransaction({
-        blobId: encoded.blobId,
-        blobObjectId: FILE_REGISTRY_OBJECT_ID,
-        confirmations,
-        deletable: true,
-      });
+          // 2. Walrus: Register Blob Transaction (Sui Tx)
+          console.error(`[Tool/${name}] Creating registerBlobTransaction...`);
+          const registerTx = await walrusClient.registerBlobTransaction({
+            blobId: encoded.blobId,
+            rootHash: encoded.rootHash,
+            size: fileContent.length,
+            deletable: true,
+            epochs: storage_epochs,
+            owner: config.walletAddress,
+          });
+          console.error(`[Tool/${name}] Executing registerBlobTransaction...`);
+          const registerResult = await executeSuiTransaction(registerTx);
+          console.error(
+            `[Tool/${name}] registerBlobTransaction digest: ${registerResult.digest}`,
+          );
+          if (registerResult.effects?.status.status !== "success") {
+            throw new Error(
+              `Failed to register blob on Sui: ${registerResult.effects?.status.error}`,
+            );
+          }
+          // Find the created blob object ID from objectChanges
+          const createdBlobObjectChange = registerResult.objectChanges?.find(
+            (oc) =>
+              oc.type === "created" &&
+              oc.objectType ===
+                `0x2::object::Object<${GOLDFISH_PACKAGE_ID}::goldfish_backend::Blob>`, // Adjust type if needed
+          );
+          if (
+            !createdBlobObjectChange ||
+            !("objectId" in createdBlobObjectChange)
+          ) {
+            throw new Error(
+              "Could not find created Blob object ID in registerBlobTransaction effects.",
+            );
+          }
+          const walrusBlobObjectId = createdBlobObjectChange.objectId;
+          console.error(
+            `[Tool/${name}] Walrus Blob Object ID from Sui: ${walrusBlobObjectId}`,
+          );
 
-      // Get blob metadata
-      const metadata = await walrusClient.getBlobMetadata({
-        blobId: encoded.blobId,
-      });
+          // 3. Walrus: Write Encoded Blob to Nodes
+          console.error(`[Tool/${name}] Writing encoded blob to nodes...`);
+          const confirmations = await walrusClient.writeEncodedBlobToNodes({
+            blobId: encoded.blobId,
+            metadata: encoded.metadata,
+            sliversByNode: encoded.sliversByNode,
+            deletable: true,
+            objectId: walrusBlobObjectId, // Use the objectId obtained from register tx
+          });
+          console.error(
+            `[Tool/${name}] writeEncodedBlobToNodes confirmations: ${confirmations.length}`,
+          );
 
-      return {
-        content: [{
-          type: "text" as const,
-          text: JSON.stringify({
-            blob_id: encoded.blobId,
-            metadata,
-            register_tx: registerBlobTransaction,
-            certify_tx: certifyBlobTransaction,
-          }, null, 2),
-        }],
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: "text" as const,
-          text: `Failed to upload file: ${error}`,
-        }],
-      };
-    }
-  }
-);
+          // 4. Walrus: Certify Blob Transaction (Sui Tx)
+          console.error(`[Tool/${name}] Creating certifyBlobTransaction...`);
+          const certifyTx = await walrusClient.certifyBlobTransaction({
+            blobId: encoded.blobId,
+            blobObjectId: walrusBlobObjectId, // Use the objectId
+            confirmations,
+            deletable: true,
+          });
+          console.error(`[Tool/${name}] Executing certifyBlobTransaction...`);
+          const certifyResult = await executeSuiTransaction(certifyTx);
+          console.error(
+            `[Tool/${name}] certifyBlobTransaction digest: ${certifyResult.digest}`,
+          );
+          if (certifyResult.effects?.status.status !== "success") {
+            throw new Error(
+              `Failed to certify blob on Sui: ${certifyResult.effects?.status.error}`,
+            );
+          }
 
-// Upload multiple files
-server.tool(
-  "upload_files",
-  "Upload multiple files to Walrus storage",
-  {
-    files: z.array(z.tuple([
-      z.string().describe("Filename"),
-      z.string().describe("Base64 encoded content"),
-    ])).describe("List of tuples containing (filename, content) pairs"),
-    owner_address: z.string().describe("The Sui address of the file owner"),
-    storage_epochs: z.number().optional().describe("Number of epochs to store the files (default: 3)"),
-  },
-  async ({ files, owner_address, storage_epochs = 3 }: {
-    files: [string, string][];
-    owner_address: string;
-    storage_epochs?: number;
-  }) => {
-    const results = [];
-    
-    for (const [filename, content] of files) {
-      try {
-        const fileContent = new Uint8Array(Buffer.from(content, 'base64'));
-        
-        // Encode blob
-        const encoded = await walrusClient.encodeBlob(fileContent);
+          // 5. Goldfish Contract: add_file_id (Sui Tx)
+          console.error(`[Tool/${name}] Creating add_file_id transaction...`);
+          const addFileIdTx = new Transaction();
+          addFileIdTx.moveCall({
+            target: `${GOLDFISH_PACKAGE_ID}::${FILE_REGISTRY_MODULE_NAME}::add_file_id`,
+            arguments: [
+              addFileIdTx.object(FILE_REGISTRY_OBJECT_ID),
+              addFileIdTx.pure.string(encoded.blobId), // Assuming add_file_id takes string blob_id
+            ],
+          });
+          console.error(`[Tool/${name}] Executing add_file_id transaction...`);
+          const addFileIdResult = await executeSuiTransaction(addFileIdTx);
+          console.error(
+            `[Tool/${name}] add_file_id transaction digest: ${addFileIdResult.digest}`,
+          );
+          if (addFileIdResult.effects?.status.status !== "success") {
+            throw new Error(
+              `Failed to call add_file_id on Sui: ${addFileIdResult.effects?.status.error}`,
+            );
+          }
 
-        // Register blob transaction
-        const registerBlobTransaction = await walrusClient.registerBlobTransaction({
-          blobId: encoded.blobId,
-          rootHash: encoded.rootHash,
-          size: fileContent.length,
-          deletable: true,
-          epochs: storage_epochs,
-          owner: owner_address,
-        });
+          console.error(
+            `[Tool/${name}] Successfully uploaded ${filename} (Blob ID: ${encoded.blobId})`,
+          );
+          const finalMetadata = await walrusClient.getBlobMetadata({
+            blobId: encoded.blobId,
+          });
 
-        // Write encoded blob to nodes
-        const confirmations = await walrusClient.writeEncodedBlobToNodes({
-          blobId: encoded.blobId,
-          metadata: encoded.metadata,
-          sliversByNode: encoded.sliversByNode,
-          deletable: true,
-          objectId: FILE_REGISTRY_OBJECT_ID,
-        });
-
-        // Certify blob
-        const certifyBlobTransaction = await walrusClient.certifyBlobTransaction({
-          blobId: encoded.blobId,
-          blobObjectId: FILE_REGISTRY_OBJECT_ID,
-          confirmations,
-          deletable: true,
-        });
-
-        // Get blob metadata
-        const metadata = await walrusClient.getBlobMetadata({
-          blobId: encoded.blobId,
-        });
-
-        results.push({
-          success: true,
-          filename,
-          blob_id: encoded.blobId,
-          metadata,
-          register_tx: registerBlobTransaction,
-          certify_tx: certifyBlobTransaction,
-        });
-      } catch (error) {
-        results.push({
-          success: false,
-          filename,
-          error: String(error),
-        });
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    filename,
+                    blob_id: encoded.blobId,
+                    metadata: finalMetadata,
+                    sui_registry_update_digest: addFileIdResult.digest,
+                  },
+                  null,
+                  2,
+                ),
+              } as TextContent,
+            ],
+          };
+        }
+        // Add case for UPLOAD_FILES_TOOL if you implement its definition
+        default:
+          console.error(`[Tool Error] Unknown tool: ${name}`);
+          return {
+            content: [
+              { type: "text", text: `Unknown tool: ${name}` } as TextContent,
+            ],
+            isError: true,
+          };
       }
+    } catch (error) {
+      console.error(`[Tool/${name}] Error:`, error);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Tool ${name} failed: ${error instanceof Error ? error.message : String(error)}`,
+          } as TextContent,
+        ],
+        isError: true,
+      };
     }
-
-    return {
-      content: [{
-        type: "text" as const,
-        text: JSON.stringify(results, null, 2),
-      }],
-    };
-  }
+  },
 );
 
-// Initialize and run the server
+// --- Main Server Logic ---
 async function main() {
+  const walletAddressFromEnv = process.env.GOLDFISH_WALLET_ADDRESS;
+  const privateKeyHexFromEnv = process.env.GOLDFISH_SERVER_PRIVATE_KEY_HEX;
+  const walletAddressFromArg = process.argv[2];
+  const privateKeyHexFromArg = process.argv[3]; // Assuming pk is the second arg
+
+  const walletAddress = walletAddressFromEnv || walletAddressFromArg;
+  const serverPkHex = privateKeyHexFromEnv || privateKeyHexFromArg;
+
+  if (!walletAddress) {
+    console.error(
+      "Error: Goldfish wallet address not configured. Set GOLDFISH_WALLET_ADDRESS or pass as 1st cmd arg.",
+    );
+    process.exit(1);
+  }
+  if (!serverPkHex) {
+    console.warn(
+      "Warning: GOLDFISH_SERVER_PRIVATE_KEY_HEX not configured. Tools requiring Sui transactions will fail.",
+    );
+    // Not exiting, but tools will fail if they need to sign.
+  } else {
+    try {
+      serverKeypair = Ed25519Keypair.fromSecretKey(
+        Buffer.from(serverPkHex, "hex"),
+      );
+      if (serverKeypair.getPublicKey().toSuiAddress() !== walletAddress) {
+        console.warn(
+          `Warning: Configured server private key does not match GOLDFISH_WALLET_ADDRESS. Expected ${walletAddress}, got ${serverKeypair.getPublicKey().toSuiAddress()}. Sui transactions may fail or use the wrong sender.`,
+        );
+        // You might want to exit(1) here if this is a critical mismatch
+      } else {
+        console.error(
+          `Server keypair loaded successfully for address: ${serverKeypair.getPublicKey().toSuiAddress()}`,
+        );
+      }
+    } catch (e) {
+      console.error(
+        "Error loading server private key. Ensure it's a valid hex string.",
+        e,
+      );
+      process.exit(1);
+    }
+  }
+
+  config = { walletAddress, serverPrivateKeyHex: serverPkHex };
+  console.error(
+    `Goldfish MCP Server starting for wallet: ${config.walletAddress}`,
+  );
+
+  try {
+    const blobType = await walrusClient.getBlobType();
+    console.error("Successfully connected to Walrus, blob type:", blobType);
+  } catch (e) {
+    console.error("Failed to connect to Walrus on startup:", e);
+  }
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Goldfish MCP Server running on stdio");
+  console.error("Goldfish MCP Server running on stdio and connected.");
 }
 
 main().catch((error) => {
   console.error("Fatal error in main():", error);
   process.exit(1);
-}); 
+});

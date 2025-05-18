@@ -1,0 +1,27 @@
+artur@artur-RLEF-XX:~/Documents/Code/project-goldfish/goldfish_frontend/src/hooks$ tsx test.ts [
+  {
+    id: {
+      id: '0x0e2c5cbfb502796a74afb1b15877b5946b30bede120af261757996303cc803fb'
+    },
+    name: '0x0d2d6de7871f4872cc0d48e159838f3ea9a8ffeb07794f35658733bb6e3081fe',
+    value: [ 'c1bYorYUPReXinOF4-NvshVU0mJUz_I7cT83q8SrgeU' ]
+  },
+  {
+    id: {
+      id: '0x4779a976542a627e460ccd40f4ae264a29f67f0beac92c586c78e2a106987f89'
+    },
+    name: '0x8eb94720800f4a437b5ceb4c855be6a5f666d3515c5d9d0a734856ccc9ee8a17',
+    value: [
+      'pIG7AYZBOw0qD1ovFqNKUoq68qRXAXiLtCiwBdQzirc',
+      'sntwX3C02JImWO-CbopUWI6PG9yEhBNd1DRHqwZlJjY'
+    ]
+  },
+  {
+    id: {
+      id: '0xbe60de22930e263b49e1faeb2d078a9c8125820293a535146113f25a03aee829'
+    },
+    name: '0x38e6bd6c23b8cd9b8ea0e18bd45da43406190df850b1d47614fd573eac41a913',
+    value: [ '123456789' ]
+  }
+]
+artur@artur-RLEF-XX:~/Documents/Code/project-goldfish/goldfish_frontend/src/hooks$

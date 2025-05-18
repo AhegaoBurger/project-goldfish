@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.11.3",
-    "@mysten/sui": "^1.28.2",
+    "@mysten/sui": "1.28.2",
     "@mysten/walrus": "^0.0.19",
     "@mysten/walrus-wasm": "^0.0.6",
     "zod": "^3.22.4"
@@ -20,4 +20,4 @@
     "ts-node": "^10.9.2",
     "typescript": "~5.7.2"
   }
-} 
+}
