@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,10 +20,10 @@ import {
   Search,
 } from "lucide-react";
 import FileOptions from "./file-options";
-import { WalrusClient } from "@mysten/walrus";
-import { useSuiClient } from "@mysten/dapp-kit";
-import { NETWORK, TABLE_OBJECT_ID } from "../constants";
-import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url";
+// import { WalrusClient } from "@mysten/walrus";
+// import { useSuiClient } from "@mysten/dapp-kit";
+import { TABLE_OBJECT_ID } from "../constants";
+// import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url";
 import { useUserFileContents } from "../hooks/useUserFilesIds";
 import { uint8ArrayToString } from "../lib/fileHelpers";
 
@@ -39,25 +39,24 @@ type FileItem = {
 
 export default function FileList() {
   const [searchQuery, setSearchQuery] = useState("");
-  const suiClient = useSuiClient(); // Use the client from dapp-kit provider
+  // const suiClient = useSuiClient(); // Use the client from dapp-kit provider
 
   // Memoize Walrus Client instance
-  const walrusClient = useMemo(() => {
-    if (!suiClient) return null;
-    // console.log('Initializing WalrusClient with WASM URL:', walrusWasmUrl);
-    return new WalrusClient({
-      suiClient: suiClient,
-      network: NETWORK,
-      wasmUrl: walrusWasmUrl,
-      storageNodeClientOptions: {
-        onError: (error) => console.error("Walrus Node Error:", error),
-      },
-    });
-  }, [suiClient]);
+  // const walrusClient = useMemo(() => {
+  //   if (!suiClient) return null;
+  //   // console.log('Initializing WalrusClient with WASM URL:', walrusWasmUrl);
+  //   return new WalrusClient({
+  //     suiClient: suiClient,
+  //     network: NETWORK,
+  //     wasmUrl: walrusWasmUrl,
+  //     storageNodeClientOptions: {
+  //       onError: (error) => console.error("Walrus Node Error:", error),
+  //     },
+  //   });
+  // }, [suiClient]);
 
   const { userFileGroups, isLoading, error, refetch } = useUserFileContents({
     parentId: TABLE_OBJECT_ID,
-    walrusClient,
   });
 
   if (isLoading) return <p>Loading dynamic field values...</p>;

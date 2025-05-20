@@ -1,12 +1,17 @@
 // src/hooks/useUserFileContents.ts
 import { useState, useEffect, useCallback } from "react";
-import { useSuiClient, useCurrentAccount, useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import {
+  useSuiClient,
+  useCurrentAccount,
+  // useSignAndExecuteTransaction,
+} from "@mysten/dapp-kit";
 import type {
   // SuiClient,
   DynamicFieldInfo,
   SuiObjectResponse,
 } from "@mysten/sui/client";
-import { WalrusClient, BlobNotCertifiedError } from "@mysten/walrus";
+import { BlobNotCertifiedError } from "@mysten/walrus";
+import { walrusClient } from "./useWalrus";
 
 // --- Walrus Client Interface ---
 // You'll need to ensure your actual WalrusClient instance matches this interface
@@ -63,12 +68,12 @@ export interface UseUserFileContentsState {
 // Props for the hook
 export interface UseUserFileContentsProps {
   parentId: string; // Parent object ID for dynamic fields
-  walrusClient: WalrusClient | null; // The Walrus client instance for reading blobs
+  // walrusClient: WalrusClient | null; // The Walrus client instance for reading blobs
 }
 
 export function useUserFileContents({
   parentId,
-  walrusClient,
+  // walrusClient,
 }: UseUserFileContentsProps): UseUserFileContentsState {
   const [userFileGroups, setUserFileGroups] = useState<
     Array<BlobFetchResult[]>
@@ -78,42 +83,7 @@ export function useUserFileContents({
 
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
-
-  // Log parentId and attempt to get network info through different means
-  useEffect(() => {
-    const logNetworkInfo = async () => {
-      try {
-        // Try to get network info from system state
-        if (walrusClient) {
-          console.log('[Goldfish] Attempting to get Walrus system info...');
-          const systemState = await walrusClient.systemState();
-          console.log('[Goldfish] Walrus system state:', systemState);
-          
-          // Try to get staking state for additional network info
-          const stakingState = await walrusClient.stakingState();
-          console.log('[Goldfish] Walrus staking state:', stakingState);
-        }
-
-        // Log Sui client network info if available
-        if (suiClient) {
-          const chainId = await suiClient.getChainIdentifier();
-          console.log('[Goldfish] Sui chain identifier:', chainId);
-        }
-
-        console.log('[Goldfish] useUserFileContents init:', {
-          parentId,
-          currentAccount: currentAccount?.address,
-          hasWalrusClient: !!walrusClient,
-          hasSuiClient: !!suiClient,
-        });
-      } catch (err) {
-        console.warn('[Goldfish] Error getting network info:', err);
-      }
-    };
-
-    logNetworkInfo();
-  }, [parentId, walrusClient, suiClient, currentAccount?.address]);
+  // const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
   // Helper function to get blob status and attempt certification if needed
   const getVerifiedBlobStatus = useCallback(
@@ -121,81 +91,18 @@ export function useUserFileContents({
       if (!walrusClient) return false;
 
       try {
-        console.log('[Goldfish] Checking blob status', {
-          blobId,
-          hasWalrusClient: !!walrusClient,
-        });
-
-        // Try to get blob type to ensure we're properly connected
-        try {
-          const blobType = await walrusClient.getBlobType();
-          console.log('[Goldfish] Blob type:', blobType);
-        } catch (typeErr) {
-          console.warn('[Goldfish] Error getting blob type:', typeErr);
-        }
-
-        // Try multiple nodes for storage confirmation
-        const MAX_NODES = 3; // Try first 3 nodes
-        for (let nodeIndex = 0; nodeIndex < MAX_NODES; nodeIndex++) {
-          try {
-            console.log(`[Goldfish] Attempting to get storage confirmation from node ${nodeIndex}...`);
-            const confirmation = await walrusClient.getStorageConfirmationFromNode({
-              nodeIndex,
-              blobId,
-              deletable: true,
-              objectId: parentId,
-            });
-            console.log(`[Goldfish] Storage confirmation from node ${nodeIndex}:`, confirmation);
-            
-            // If we got a confirmation, try to get metadata
-            try {
-              console.log(`[Goldfish] Attempting to get blob metadata using node ${nodeIndex}...`);
-              const metadata = await walrusClient.getBlobMetadata({ blobId });
-              console.log('[Goldfish] Successfully got blob metadata:', metadata);
-              
-              // If we got metadata, the blob exists
-              return true;
-            } catch (metaErr) {
-              console.warn(`[Goldfish] Node ${nodeIndex} metadata error:`, metaErr);
-            }
-          } catch (confirmErr) {
-            console.warn(`[Goldfish] Node ${nodeIndex} confirmation error:`, confirmErr);
-          }
-        }
-
-        // If we got here, try one last time with getVerifiedBlobStatus
+        // First check the blob status
         const status = await walrusClient.getVerifiedBlobStatus({ blobId });
-        console.log(`[Goldfish] Final blob ${blobId} status check:`, status);
+        console.log(`Blob ${blobId} status:`, status);
 
-        if (status.type === 'nonexistent') {
-          // Try to get slivers as a last resort
-          try {
-            console.log('[Goldfish] Final attempt - getting blob slivers...');
-            const slivers = await walrusClient.getSlivers({ blobId });
-            if (slivers && slivers.length > 0) {
-              console.log('[Goldfish] Found slivers:', slivers);
-              return true;
-            }
-          } catch (sliversErr) {
-            console.warn('[Goldfish] Error getting slivers:', sliversErr);
-          }
-
-          // Log a more detailed error message
-          console.error('[Goldfish] Blob appears nonexistent after all attempts. This could mean:', [
-            '1. The blob is not yet fully propagated to all nodes',
-            '2. The blob exists on a different network',
-            '3. The blob ID format might be incorrect',
-            '4. The blob might need recertification'
-          ].join('\n'));
-        }
-
-        return status.type !== 'nonexistent';
+        // If the blob exists and is verified, we're good
+        return true;
       } catch (err) {
-        console.warn(`[Goldfish] Error in blob verification process for ${blobId}:`, err);
+        console.warn(`Error getting blob status for ${blobId}:`, err);
         return false;
       }
     },
-    [walrusClient, parentId]
+    [],
   );
 
   const fetchData = useCallback(async () => {
@@ -292,41 +199,43 @@ export function useUserFileContents({
                       const blobFetchResultsPromises = blobIds.map(
                         async (blobId) => {
                           try {
-                            // Log the blobId before any operation
-                            console.log('[Goldfish] Processing blobId:', blobId);
                             // First check blob status
                             await getVerifiedBlobStatus(blobId);
+
                             // Try to read the blob
                             try {
                               const blobData = await walrusClient!.readBlob({
                                 blobId,
                               });
-                              console.log('[Goldfish] Got blob data', {
-                                blobId,
-                                byteLength: blobData.byteLength,
-                                preview: new TextDecoder().decode(blobData.slice(0, 32)),
-                              });
+                              console.log("we got blob data", blobData);
                               console.log(
-                                '[Goldfish] Readable buffer:',
+                                "readable: ",
                                 blobData.buffer as ArrayBuffer,
                               );
-                              return { blobId, data: blobData, error: undefined };
+                              return {
+                                blobId,
+                                data: blobData,
+                                error: undefined,
+                              };
                             } catch (readError) {
                               // If the blob is not certified, we'll get a specific error
                               if (readError instanceof BlobNotCertifiedError) {
-                                console.log(`[Goldfish] Blob ${blobId} is not certified. Cannot read without certification.`);
+                                console.log(
+                                  `Blob ${blobId} is not certified. Cannot read without certification.`,
+                                );
                               }
                               return {
                                 blobId,
                                 data: null,
-                                error: readError instanceof Error
-                                  ? readError.message
-                                  : String(readError),
+                                error:
+                                  readError instanceof Error
+                                    ? readError.message
+                                    : String(readError),
                               };
                             }
                           } catch (blobError: any) {
                             console.error(
-                              `[Goldfish] Failed to process blob ${blobId}:`,
+                              `Failed to process blob ${blobId}:`,
                               blobError,
                             );
                             return {
@@ -387,7 +296,7 @@ export function useUserFileContents({
     } finally {
       setIsLoading(false);
     }
-  }, [suiClient, parentId, currentAccount?.address, walrusClient, getVerifiedBlobStatus, signAndExecute]); // Dependencies for useCallback
+  }, [suiClient, parentId, currentAccount?.address, getVerifiedBlobStatus]); // Dependencies for useCallback
 
   useEffect(() => {
     fetchData(); // Call fetchData when dependencies change
