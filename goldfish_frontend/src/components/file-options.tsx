@@ -33,7 +33,7 @@ type FileOptionsProps = {
 export default function FileOptions({
   fileId,
   fileName,
-  storageEpochs,
+  // storageEpochs,
   isDeletable,
   fileData,
   onDelete,
@@ -130,19 +130,19 @@ export default function FileOptions({
     }
   };
 
-  const handleShare = () => {
-    console.log(`Sharing file: ${fileName} (${fileId})`);
-    toast("Share Feature", {
-      description: "Sharing functionality coming soon",
-    });
-  };
+  // const handleShare = () => {
+  //   console.log(`Sharing file: ${fileName} (${fileId})`);
+  //   toast("Share Feature", {
+  //     description: "Sharing functionality coming soon",
+  //   });
+  // };
 
-  const handleRename = () => {
-    console.log(`Renaming file: ${fileName} (${fileId})`);
-    toast("Rename Feature", {
-      description: "Renaming functionality coming soon",
-    });
-  };
+  // const handleRename = () => {
+  //   console.log(`Renaming file: ${fileName} (${fileId})`);
+  //   toast("Rename Feature", {
+  //     description: "Renaming functionality coming soon",
+  //   });
+  // };
 
   const handleDelete = async () => {
     if (!currentAccount) {
@@ -186,14 +186,14 @@ export default function FileOptions({
     }
   };
 
-  const handleExtendStorage = () => {
-    console.log(
-      `Extending storage for file: ${fileName} (${fileId}) from ${storageEpochs} epochs`,
-    );
-    toast("Extend Storage Feature", {
-      description: "Storage extension functionality coming soon",
-    });
-  };
+  // const handleExtendStorage = () => {
+  //   console.log(
+  //     `Extending storage for file: ${fileName} (${fileId}) from ${storageEpochs} epochs`,
+  //   );
+  //   toast("Extend Storage Feature", {
+  //     description: "Storage extension functionality coming soon",
+  //   });
+  // };
 
   return (
     <DropdownMenu>

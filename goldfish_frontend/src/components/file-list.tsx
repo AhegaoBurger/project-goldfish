@@ -29,8 +29,8 @@ import { useUserFileContents, BlobFetchResult } from "../hooks/useUserFilesIds";
 import {
   // uint8ArrayToString,
   formatFileSize,
-  getFileTypeFromData,
-  getFileExtension
+  // getFileTypeFromData,
+  // getFileExtension
 } from "../lib/fileHelpers";
 import { walrusClient } from "@/hooks/useWalrus";
 
