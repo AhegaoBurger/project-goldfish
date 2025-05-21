@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -8,12 +9,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical } from "lucide-react";
+import {
+  useSignAndExecuteTransaction,
+  useCurrentAccount,
+} from "@mysten/dapp-kit";
+import {
+  GOLDFISH_PACKAGE_ID,
+  FILE_REGISTRY_OBJECT_ID,
+  FILE_REGISTRY_MODULE_NAME,
+} from "@/constants";
+import { Transaction } from "@mysten/sui/transactions";
+import { toast } from "sonner";
 
 type FileOptionsProps = {
   fileId: string;
   fileName: string;
   storageEpochs: number;
   isDeletable: boolean;
+  fileData?: Uint8Array | null;
+  onDelete?: () => void;
 };
 
 export default function FileOptions({
@@ -21,32 +35,148 @@ export default function FileOptions({
   fileName,
   storageEpochs,
   isDeletable,
+  fileData,
+  onDelete,
 }: FileOptionsProps) {
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const currentAccount = useCurrentAccount();
+
   const handleDownload = () => {
-    console.log(`Downloading file: ${fileName} (${fileId})`);
-    // Implement download functionality
+    if (!fileData) {
+      toast.error("Download Failed", {
+        description: "No file data available to download",
+      });
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      // Determine MIME type based on the file type property or try to detect it
+      let mimeType = "application/octet-stream"; // default mime type
+      
+      // Extract file extension from fileName or try to detect from content
+      const fileExtension = fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() : '';
+      if (fileExtension) {
+        switch (fileExtension) {
+          case 'pdf': mimeType = 'application/pdf'; break;
+          case 'png': mimeType = 'image/png'; break;
+          case 'jpg':
+          case 'jpeg': mimeType = 'image/jpeg'; break;
+          case 'gif': mimeType = 'image/gif'; break;
+          case 'svg': mimeType = 'image/svg+xml'; break;
+          case 'mp4': mimeType = 'video/mp4'; break;
+          case 'mp3': mimeType = 'audio/mpeg'; break;
+          case 'json': mimeType = 'application/json'; break;
+          case 'txt': mimeType = 'text/plain'; break;
+          case 'doc': mimeType = 'application/msword'; break;
+          case 'docx': mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'; break;
+          case 'xls': mimeType = 'application/vnd.ms-excel'; break;
+          case 'xlsx': mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; break;
+          // Add more cases as needed
+        }
+      }
+
+      // Create a blob with the appropriate MIME type
+      const blob = new Blob([fileData], { type: mimeType });
+
+      // Create a temporary download link
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      // Use the original filename if it has an extension, otherwise add one based on mime type
+      if (!fileName.includes('.')) {
+        const defaultExt = mimeType.split('/')[1].split(';')[0];
+        a.download = `${fileName}.${defaultExt}`;
+      } else {
+        a.download = fileName;
+      }
+
+      // Trigger the download
+      document.body.appendChild(a);
+      a.click();
+
+      // Clean up
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast("Download Started", {
+        description: `Downloading ${fileName}`,
+      });
+    } catch (error) {
+      console.error("Download error:", error);
+      toast.error("Download Failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const handleShare = () => {
     console.log(`Sharing file: ${fileName} (${fileId})`);
-    // Implement share functionality
+    toast("Share Feature", {
+      description: "Sharing functionality coming soon",
+    });
   };
 
   const handleRename = () => {
     console.log(`Renaming file: ${fileName} (${fileId})`);
-    // Implement rename functionality
+    toast("Rename Feature", {
+      description: "Renaming functionality coming soon",
+    });
   };
 
-  const handleDelete = () => {
-    console.log(`Deleting file: ${fileName} (${fileId})`);
-    // Implement delete functionality
+  const handleDelete = async () => {
+    if (!currentAccount) {
+      toast.warning("Error", {
+        description: "Please connect your wallet first",
+      });
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      // Create transaction to remove file ID
+      const tx = new Transaction();
+      tx.moveCall({
+        target: `${GOLDFISH_PACKAGE_ID}::${FILE_REGISTRY_MODULE_NAME}::remove_file_id`,
+        arguments: [tx.object(FILE_REGISTRY_OBJECT_ID), tx.pure.string(fileId)],
+      });
+
+      // Execute the transaction
+      const result = await signAndExecute({
+        transaction: tx,
+      });
+
+      console.log("Delete transaction result:", result);
+
+      // If provided, call the onDelete callback to refresh the file list
+      if (onDelete) {
+        onDelete();
+      }
+
+      toast("File Deleted", {
+        description: `Successfully deleted ${fileName}`,
+      });
+    } catch (error) {
+      console.error("Delete error:", error);
+      toast.error("Delete Failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleExtendStorage = () => {
     console.log(
       `Extending storage for file: ${fileName} (${fileId}) from ${storageEpochs} epochs`,
     );
-    // Implement extend storage functionality
+    toast("Extend Storage Feature", {
+      description: "Storage extension functionality coming soon",
+    });
   };
 
   return (
@@ -58,15 +188,24 @@ export default function FileOptions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={handleDownload}>Download</DropdownMenuItem>
-        <DropdownMenuItem onClick={handleShare}>Share</DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={handleDownload}
+          disabled={isDownloading || !fileData}
+        >
+          {isDownloading ? "Downloading..." : "Download"}
+        </DropdownMenuItem>
+        {/* <DropdownMenuItem onClick={handleShare}>Share</DropdownMenuItem>
         <DropdownMenuItem onClick={handleRename}>Rename</DropdownMenuItem>
         <DropdownMenuItem onClick={handleExtendStorage}>
           Extend Storage
-        </DropdownMenuItem>
+        </DropdownMenuItem> */}
         {isDeletable && (
-          <DropdownMenuItem onClick={handleDelete} className="text-red-600">
-            Delete
+          <DropdownMenuItem
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="text-red-600"
+          >
+            {isDeleting ? "Deleting..." : "Delete"}
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>

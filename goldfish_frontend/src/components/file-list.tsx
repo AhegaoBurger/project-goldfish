@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,126 +18,47 @@ import {
   FileVideo,
   Music,
   Search,
+  FileJson,
+  FileSpreadsheet,
+  FileArchive,
+  FileCode,
 } from "lucide-react";
 import FileOptions from "./file-options";
-// import { WalrusClient } from "@mysten/walrus";
-// import { useSuiClient } from "@mysten/dapp-kit";
 import { TABLE_OBJECT_ID } from "../constants";
-// import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url";
-import { useUserFileContents } from "../hooks/useUserFilesIds";
-import { uint8ArrayToString } from "../lib/fileHelpers";
+import { useUserFileContents, BlobFetchResult } from "../hooks/useUserFilesIds";
+import {
+  // uint8ArrayToString,
+  formatFileSize,
+  getFileTypeFromData,
+  getFileExtension
+} from "../lib/fileHelpers";
+import { walrusClient } from "@/hooks/useWalrus";
 
-type FileItem = {
-  id: string;
+// Define the file item type for our processed files
+interface FileItem {
+  id: string; // The blob ID
+  objectId: string; // The blob object ID if available
   name: string;
+  extension: string;
   type: string;
   size: string;
   lastModified: string;
   storageEpochs: number;
   isDeletable: boolean;
-};
+  data: Uint8Array | null;
+  error?: string;
+}
 
 export default function FileList() {
   const [searchQuery, setSearchQuery] = useState("");
-  // const suiClient = useSuiClient(); // Use the client from dapp-kit provider
-
-  // Memoize Walrus Client instance
-  // const walrusClient = useMemo(() => {
-  //   if (!suiClient) return null;
-  //   // console.log('Initializing WalrusClient with WASM URL:', walrusWasmUrl);
-  //   return new WalrusClient({
-  //     suiClient: suiClient,
-  //     network: NETWORK,
-  //     wasmUrl: walrusWasmUrl,
-  //     storageNodeClientOptions: {
-  //       onError: (error) => console.error("Walrus Node Error:", error),
-  //     },
-  //   });
-  // }, [suiClient]);
+  const [processedFiles, setProcessedFiles] = useState<FileItem[]>([]);
+  const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
 
   const { userFileGroups, isLoading, error, refetch } = useUserFileContents({
     parentId: TABLE_OBJECT_ID,
   });
 
-  if (isLoading) return <p>Loading dynamic field values...</p>;
-  if (error)
-    return (
-      <p>
-        Error: {error} <button onClick={refetch}>Retry</button>
-      </p>
-    );
-
-  // Sample file data
-  const files: FileItem[] = [
-    {
-      id: "1",
-      name: "project-proposal.pdf",
-      type: "pdf",
-      size: "2.4 MB",
-      lastModified: "Today, 2:30 PM",
-      storageEpochs: 2,
-      isDeletable: true,
-    },
-    {
-      id: "2",
-      name: "company-logo.png",
-      type: "image",
-      size: "840 KB",
-      lastModified: "Yesterday, 10:15 AM",
-      storageEpochs: 1,
-      isDeletable: true,
-    },
-    {
-      id: "3",
-      name: "quarterly-report.xlsx",
-      type: "spreadsheet",
-      size: "1.2 MB",
-      lastModified: "Apr 20, 2023",
-      storageEpochs: 3,
-      isDeletable: false,
-    },
-    {
-      id: "4",
-      name: "product-demo.mp4",
-      type: "video",
-      size: "24.8 MB",
-      lastModified: "Apr 18, 2023",
-      storageEpochs: 2,
-      isDeletable: true,
-    },
-    {
-      id: "5",
-      name: "meeting-notes.docx",
-      type: "document",
-      size: "320 KB",
-      lastModified: "Apr 15, 2023",
-      storageEpochs: 1,
-      isDeletable: false,
-    },
-    {
-      id: "6",
-      name: "presentation.pptx",
-      type: "presentation",
-      size: "5.7 MB",
-      lastModified: "Apr 10, 2023",
-      storageEpochs: 3,
-      isDeletable: true,
-    },
-    {
-      id: "7",
-      name: "background-music.mp3",
-      type: "audio",
-      size: "3.2 MB",
-      lastModified: "Apr 5, 2023",
-      storageEpochs: 1,
-      isDeletable: true,
-    },
-  ];
-
-  const filteredFiles = files.filter((file) =>
-    file.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-
+  // Get file icon based on file type
   const getFileIcon = (type: string) => {
     switch (type) {
       case "image":
@@ -146,13 +67,180 @@ export default function FileList() {
         return <FileVideo className="h-5 w-5 text-red-500" />;
       case "audio":
         return <Music className="h-5 w-5 text-purple-500" />;
-      case "document":
       case "pdf":
         return <FileText className="h-5 w-5 text-amber-500" />;
+      case "document":
+        return <FileText className="h-5 w-5 text-amber-500" />;
+      case "json":
+        return <FileJson className="h-5 w-5 text-green-500" />;
+      case "spreadsheet":
+        return <FileSpreadsheet className="h-5 w-5 text-green-700" />;
+      case "archive":
+        return <FileArchive className="h-5 w-5 text-gray-700" />;
+      case "code":
+        return <FileCode className="h-5 w-5 text-indigo-500" />;
       default:
         return <File className="h-5 w-5 text-gray-500" />;
     }
   };
+
+  // Process the file groups into usable file items
+  useEffect(() => {
+    const processFiles = async () => {
+      if (!walrusClient || !userFileGroups.length) {
+        setProcessedFiles([]);
+        return;
+      }
+
+      setIsLoadingMetadata(true);
+
+      try {
+        // Flatten all the file groups into a single array of blob results
+        const allBlobResults: BlobFetchResult[] = userFileGroups.flatMap(
+          (group) => group,
+        );
+
+        // Process each blob to get its metadata and attributes
+        const filePromises = allBlobResults.map(async (blobResult) => {
+          try {
+            if (blobResult.error || !blobResult.data) {
+              return {
+                id: blobResult.blobId,
+                objectId: "",
+                name: `File (${blobResult.blobId.substring(0, 8)}...)`,
+                extension: "",
+                type: "unknown",
+                size: "Unknown",
+                lastModified: "Unknown",
+                storageEpochs: 0,
+                isDeletable: false,
+                data: null,
+                error: blobResult.error || "Failed to load file data",
+              };
+            }
+
+            // Get metadata for the blob
+            let metadata;
+            try {
+              metadata = await walrusClient.getBlobMetadata({
+                blobId: blobResult.blobId,
+              });
+              console.log("File metadata:", metadata);
+            } catch (metadataError) {
+              console.error("Error getting blob metadata:", metadataError);
+              metadata = null;
+            }
+
+            // Try to determine file type from the first few bytes
+            let detectedType = "unknown";
+            const fileHeader = blobResult.data.slice(0, 4);
+            
+            if (fileHeader.length >= 4) {
+              if (fileHeader[0] === 0xFF && fileHeader[1] === 0xD8) {
+                detectedType = "image/jpeg";
+              } else if (
+                fileHeader[0] === 0x89 && fileHeader[1] === 0x50 &&
+                fileHeader[2] === 0x4E && fileHeader[3] === 0x47
+              ) {
+                detectedType = "image/png";
+              } else if (fileHeader[0] === 0x47 && fileHeader[1] === 0x49 && fileHeader[2] === 0x46) {
+                detectedType = "image/gif";
+              } else if (
+                fileHeader[0] === 0x25 && fileHeader[1] === 0x50 &&
+                fileHeader[2] === 0x44 && fileHeader[3] === 0x46
+              ) {
+                detectedType = "application/pdf";
+              }
+            }
+
+            // Determine file extension from the detected type
+            let extension = "";
+            switch (detectedType) {
+              case "image/jpeg": extension = "jpg"; break;
+              case "image/png": extension = "png"; break;
+              case "image/gif": extension = "gif"; break;
+              case "application/pdf": extension = "pdf"; break;
+              default:
+                // Try to detect if it's text
+                try {
+                  const textSample = new TextDecoder().decode(blobResult.data.slice(0, 100));
+                  if (/^[\x20-\x7E\n\r\t]*$/.test(textSample)) {
+                    detectedType = "text/plain";
+                    extension = "txt";
+                  }
+                } catch {
+                  // If decoding fails, it's likely binary data
+                  detectedType = "application/octet-stream";
+                  extension = "bin";
+                }
+            }
+
+            // Use detected file type for icon and display
+            const fileType = detectedType.split('/')[0];
+            const fileName = `File-${blobResult.blobId.substring(0, 8)}.${extension}`;
+
+            // Get file size
+            const fileSize = formatFileSize(blobResult.data.byteLength);
+
+            return {
+              id: blobResult.blobId,
+              objectId: "",
+              name: fileName,
+              extension: extension,
+              type: fileType,
+              size: fileSize,
+              lastModified: "Recently uploaded",
+              storageEpochs: 1,
+              isDeletable: true,
+              data: blobResult.data,
+            };
+          } catch (err) {
+            console.error("Error processing blob:", err);
+            return {
+              id: blobResult.blobId,
+              objectId: "",
+              name: `File (${blobResult.blobId.substring(0, 8)}...)`,
+              extension: "",
+              type: "unknown",
+              size: "Unknown",
+              lastModified: "Unknown",
+              storageEpochs: 0,
+              isDeletable: false,
+              data: null,
+              error:
+                err instanceof Error
+                  ? err.message
+                  : "Unknown error processing file",
+            };
+          }
+        });
+
+        const processedFileItems = await Promise.all(filePromises);
+        setProcessedFiles(processedFileItems);
+      } catch (err) {
+        console.error("Error processing files:", err);
+      } finally {
+        setIsLoadingMetadata(false);
+      }
+    };
+
+    processFiles();
+  }, [userFileGroups, walrusClient]);
+
+  // Filter files based on search query
+  const filteredFiles = useMemo(() => {
+    return processedFiles.filter((file) =>
+      file.name.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [processedFiles, searchQuery]);
+
+  if (isLoading) return <p>Loading your files...</p>;
+  if (error)
+    return (
+      <p>
+        Error: {error} <button onClick={refetch}>Retry</button>
+      </p>
+    );
 
   return (
     <Card>
@@ -186,106 +274,89 @@ export default function FileList() {
           </TabsList>
 
           <TabsContent value="all" className="m-0">
-            <div className="rounded-md border">
-              <div className="grid grid-cols-12 gap-2 border-b bg-gray-50 p-3 text-sm font-medium text-gray-500">
-                <div className="col-span-4">Name</div>
-                <div className="col-span-1">Size</div>
-                <div className="col-span-2">Last Modified</div>
-                <div className="col-span-2">Storage (Epochs)</div>
-                <div className="col-span-2">Deletable</div>
-                <div className="col-span-1"></div>
+            {isLoadingMetadata ? (
+              <div className="p-8 text-center">
+                <p className="text-gray-500">Loading file information...</p>
               </div>
+            ) : (
+              <div className="rounded-md border">
+                <div className="grid grid-cols-12 gap-2 border-b bg-gray-50 p-3 text-sm font-medium text-gray-500">
+                  <div className="col-span-4">Name</div>
+                  <div className="col-span-1">Size</div>
+                  <div className="col-span-2">Last Modified</div>
+                  <div className="col-span-2">Storage (Epochs)</div>
+                  <div className="col-span-2">Deletable</div>
+                  <div className="col-span-1"></div>
+                </div>
 
-              {filteredFiles.length > 0 ? (
-                <div className="divide-y">
-                  {filteredFiles.map((file) => (
-                    <div
-                      key={file.id}
-                      className="grid grid-cols-12 gap-2 p-3 text-sm items-center"
-                    >
-                      <div className="col-span-4 flex items-center gap-2">
-                        {getFileIcon(file.type)}
-                        <span className="font-medium truncate">
-                          {file.name}
-                        </span>
+                {filteredFiles.length > 0 ? (
+                  <div className="divide-y">
+                    {filteredFiles.map((file) => (
+                      <div
+                        key={file.id}
+                        className={`grid grid-cols-12 gap-2 p-3 text-sm items-center ${file.error ? "bg-red-50" : ""}`}
+                      >
+                        <div className="col-span-4 flex items-center gap-2">
+                          {getFileIcon(file.type)}
+                          <span className="font-medium truncate">
+                            {file.name}
+                          </span>
+                        </div>
+                        <div className="col-span-1 text-gray-500">
+                          {file.size}
+                        </div>
+                        <div className="col-span-2 text-gray-500">
+                          {file.lastModified}
+                        </div>
+                        <div className="col-span-2 flex items-center">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs ${
+                              file.storageEpochs > 2
+                                ? "bg-green-100 text-green-800"
+                                : file.storageEpochs > 1
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-amber-100 text-amber-800"
+                            }`}
+                          >
+                            {file.storageEpochs}{" "}
+                            {file.storageEpochs === 1 ? "Epoch" : "Epochs"}
+                          </span>
+                        </div>
+                        <div className="col-span-2">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs ${
+                              file.isDeletable
+                                ? "bg-green-100 text-green-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {file.isDeletable ? "Yes" : "No"}
+                          </span>
+                        </div>
+                        <div className="col-span-1 text-right">
+                          <FileOptions
+                            fileId={file.id}
+                            fileName={file.name}
+                            storageEpochs={file.storageEpochs}
+                            isDeletable={file.isDeletable}
+                            fileData={file.data}
+                          />
+                        </div>
+                        {file.error && (
+                          <div className="col-span-12 text-red-600 text-xs mt-1">
+                            Error: {file.error}
+                          </div>
+                        )}
                       </div>
-                      <div className="col-span-1 text-gray-500">
-                        {file.size}
-                      </div>
-                      <div className="col-span-2 text-gray-500">
-                        {file.lastModified}
-                      </div>
-                      <div className="col-span-2 flex items-center">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs ${file.storageEpochs > 2 ? "bg-green-100 text-green-800" : file.storageEpochs > 1 ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"}`}
-                        >
-                          {file.storageEpochs}{" "}
-                          {file.storageEpochs === 1 ? "Epoch" : "Epochs"}
-                        </span>
-                      </div>
-                      <div className="col-span-2">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs ${file.isDeletable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
-                        >
-                          {file.isDeletable ? "Yes" : "No"}
-                        </span>
-                      </div>
-                      <div className="col-span-1 text-right">
-                        <FileOptions
-                          fileId={file.id}
-                          fileName={file.name}
-                          storageEpochs={file.storageEpochs}
-                          isDeletable={file.isDeletable}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-8 text-center">
-                  <p className="text-gray-500">No files found</p>
-                </div>
-              )}
-            </div>
-            {userFileGroups.map((fileGroup, groupIndex) => (
-              <div
-                key={groupIndex}
-                style={{
-                  marginBottom: "20px",
-                  border: "1px solid #ccc",
-                  padding: "10px",
-                }}
-              >
-                <h3>File Group {groupIndex + 1} (from one dynamic field)</h3>
-                {fileGroup.length === 0 && <p>This group is empty.</p>}
-                <ul>
-                  {fileGroup.map((fileResult, fileIndex) => (
-                    <li key={`${groupIndex}-${fileResult.blobId}-${fileIndex}`}>
-                      <strong>Blob ID:</strong> {fileResult.blobId}
-                      <br />
-                      {fileResult.error ? (
-                        <span style={{ color: "red" }}>
-                          Error: {fileResult.error}
-                        </span>
-                      ) : (
-                        <>
-                          <strong>Content (first 100 chars):</strong>
-                          <pre>
-                            {uint8ArrayToString(fileResult.data)?.substring(
-                              0,
-                              100,
-                            ) || "Empty content"}
-                          </pre>
-                          {fileResult.data && (
-                            <p>(Size: {fileResult.data.byteLength} bytes)</p>
-                          )}
-                        </>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center">
+                    <p className="text-gray-500">No files found</p>
+                  </div>
+                )}
               </div>
-            ))}
+            )}
           </TabsContent>
 
           <TabsContent value="recent" className="m-0">

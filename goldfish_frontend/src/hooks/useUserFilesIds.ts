@@ -13,15 +13,6 @@ import type {
 import { BlobNotCertifiedError } from "@mysten/walrus";
 import { walrusClient } from "./useWalrus";
 
-// --- Walrus Client Interface ---
-// You'll need to ensure your actual WalrusClient instance matches this interface
-// or adjust the interface. Import it if it's from a library.
-// export interface WalrusClient {
-//   readBlob(params: { blobId: string }): Promise<Uint8Array>;
-// }
-// Example:
-// import { WalrusClient } from 'your-walrus-sdk'; // Or wherever it comes from
-
 // --- Type Definitions ---
 
 // Structure of the object within field.data.content.fields
