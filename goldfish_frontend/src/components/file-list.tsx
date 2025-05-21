@@ -26,12 +26,7 @@ import {
 import FileOptions from "./file-options";
 import { TABLE_OBJECT_ID } from "../constants";
 import { useUserFileContents, BlobFetchResult } from "../hooks/useUserFilesIds";
-import {
-  // uint8ArrayToString,
-  formatFileSize,
-  // getFileTypeFromData,
-  // getFileExtension
-} from "../lib/fileHelpers";
+import { formatFileSize, processBlobResult } from "../lib/fileHelpers";
 import { walrusClient } from "@/hooks/useWalrus";
 
 // Define the file item type for our processed files
@@ -101,121 +96,10 @@ export default function FileList() {
         );
 
         // Process each blob to get its metadata and attributes
-        const filePromises = allBlobResults.map(async (blobResult) => {
-          try {
-            if (blobResult.error || !blobResult.data) {
-              return {
-                id: blobResult.blobId,
-                objectId: "",
-                name: `File (${blobResult.blobId.substring(0, 8)}...)`,
-                extension: "",
-                type: "unknown",
-                size: "Unknown",
-                lastModified: "Unknown",
-                storageEpochs: 0,
-                isDeletable: false,
-                data: null,
-                error: blobResult.error || "Failed to load file data",
-              };
-            }
+        const processedFileItems = await Promise.all(
+          allBlobResults.map((blobResult) => processBlobResult(blobResult, walrusClient))
+        );
 
-            // Get metadata for the blob
-            let metadata;
-            try {
-              metadata = await walrusClient.getBlobMetadata({
-                blobId: blobResult.blobId,
-              });
-              console.log("File metadata:", metadata);
-            } catch (metadataError) {
-              console.error("Error getting blob metadata:", metadataError);
-              metadata = null;
-            }
-
-            // Try to determine file type from the first few bytes
-            let detectedType = "unknown";
-            const fileHeader = blobResult.data.slice(0, 4);
-            
-            if (fileHeader.length >= 4) {
-              if (fileHeader[0] === 0xFF && fileHeader[1] === 0xD8) {
-                detectedType = "image/jpeg";
-              } else if (
-                fileHeader[0] === 0x89 && fileHeader[1] === 0x50 &&
-                fileHeader[2] === 0x4E && fileHeader[3] === 0x47
-              ) {
-                detectedType = "image/png";
-              } else if (fileHeader[0] === 0x47 && fileHeader[1] === 0x49 && fileHeader[2] === 0x46) {
-                detectedType = "image/gif";
-              } else if (
-                fileHeader[0] === 0x25 && fileHeader[1] === 0x50 &&
-                fileHeader[2] === 0x44 && fileHeader[3] === 0x46
-              ) {
-                detectedType = "application/pdf";
-              }
-            }
-
-            // Determine file extension from the detected type
-            let extension = "";
-            switch (detectedType) {
-              case "image/jpeg": extension = "jpg"; break;
-              case "image/png": extension = "png"; break;
-              case "image/gif": extension = "gif"; break;
-              case "application/pdf": extension = "pdf"; break;
-              default:
-                // Try to detect if it's text
-                try {
-                  const textSample = new TextDecoder().decode(blobResult.data.slice(0, 100));
-                  if (/^[\x20-\x7E\n\r\t]*$/.test(textSample)) {
-                    detectedType = "text/plain";
-                    extension = "txt";
-                  }
-                } catch {
-                  // If decoding fails, it's likely binary data
-                  detectedType = "application/octet-stream";
-                  extension = "bin";
-                }
-            }
-
-            // Use detected file type for icon and display
-            const fileType = detectedType.split('/')[0];
-            const fileName = `File-${blobResult.blobId.substring(0, 8)}.${extension}`;
-
-            // Get file size
-            const fileSize = formatFileSize(blobResult.data.byteLength);
-
-            return {
-              id: blobResult.blobId,
-              objectId: "",
-              name: fileName,
-              extension: extension,
-              type: fileType,
-              size: fileSize,
-              lastModified: "Recently uploaded",
-              storageEpochs: 1,
-              isDeletable: true,
-              data: blobResult.data,
-            };
-          } catch (err) {
-            console.error("Error processing blob:", err);
-            return {
-              id: blobResult.blobId,
-              objectId: "",
-              name: `File (${blobResult.blobId.substring(0, 8)}...)`,
-              extension: "",
-              type: "unknown",
-              size: "Unknown",
-              lastModified: "Unknown",
-              storageEpochs: 0,
-              isDeletable: false,
-              data: null,
-              error:
-                err instanceof Error
-                  ? err.message
-                  : "Unknown error processing file",
-            };
-          }
-        });
-
-        const processedFileItems = await Promise.all(filePromises);
         setProcessedFiles(processedFileItems);
       } catch (err) {
         console.error("Error processing files:", err);
@@ -340,6 +224,7 @@ export default function FileList() {
                             storageEpochs={file.storageEpochs}
                             isDeletable={file.isDeletable}
                             fileData={file.data}
+                            onDelete={refetch}
                           />
                         </div>
                         {file.error && (
