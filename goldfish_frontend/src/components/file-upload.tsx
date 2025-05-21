@@ -1,6 +1,6 @@
 import type React from "react";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,14 +19,15 @@ import {
   useCurrentAccount,
 } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
-import { WalrusClient, RetryableWalrusClientError } from "@mysten/walrus";
+import { RetryableWalrusClientError } from "@mysten/walrus";
 import {
   GOLDFISH_PACKAGE_ID,
   FILE_REGISTRY_OBJECT_ID,
   FILE_REGISTRY_MODULE_NAME,
-  NETWORK,
+  // NETWORK,
 } from "../constants";
-import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url"; // Vite specific import
+// import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url"; // Vite specific import
+import { walrusClient } from "@/hooks/useWalrus";
 
 export default function FileUpload() {
   const [dragActive, setDragActive] = useState(false);
@@ -43,18 +44,26 @@ export default function FileUpload() {
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
   // Memoize Walrus Client instance
-  const walrusClient = useMemo(() => {
-    if (!suiClient) return null;
-    // console.log('Initializing WalrusClient with WASM URL:', walrusWasmUrl);
-    return new WalrusClient({
-      suiClient: suiClient,
-      network: NETWORK,
-      wasmUrl: walrusWasmUrl,
-      storageNodeClientOptions: {
-        onError: (error) => console.error("Walrus Node Error:", error),
-      },
-    });
-  }, [suiClient]);
+  // const walrusClient = useMemo(() => {
+  //   if (!suiClient) return null;
+  //   // console.log('Initializing WalrusClient with WASM URL:', walrusWasmUrl);
+  //   return new WalrusClient({
+  //     suiClient: suiClient,
+  //     network: NETWORK,
+  //     wasmUrl: walrusWasmUrl,
+  //     storageNodeClientOptions: {
+  //       onError: (error) => console.error("Walrus Node Error:", error),
+  //     },
+  //     packageConfig: {
+  //       systemObjectId:
+  //         "0x6c2547cbbc38025cf3adac45f63cb0a8d12ecf777cdc75a4971612bf97fdf6af",
+  //       stakingPoolId:
+  //         "0xbe46180321c30aab2f8b3501e24048377287fa708018a5b7c2792b35fe339ee3",
+  //       subsidiesObjectId:
+  //         "0xda799d85db0429765c8291c594d334349ef5bc09220e79ad397b30106161a0af",
+  //     },
+  //   });
+  // }, [suiClient]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -296,7 +305,14 @@ export default function FileUpload() {
       );
       setIsUploading(false);
     }
-  }, [file, currentWallet, currentAccount, signAndExecute, walrusClient]);
+  }, [
+    file,
+    currentWallet,
+    currentAccount,
+    signAndExecute,
+    // walrusClient,
+    suiClient,
+  ]);
 
   const removeFile = () => {
     // setFiles(files.filter((_, i) => i !== index)); // original

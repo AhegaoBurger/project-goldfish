@@ -16,7 +16,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const { networkConfig } = createNetworkConfig({
   // You can add configurations for other networks here (e.g., testnet, mainnet)
   // devnet: { url: getFullnodeUrl("devnet") },
-  testnet: { url: getFullnodeUrl('testnet') },
+  testnet: { url: getFullnodeUrl("testnet") },
   // mainnet: { url: getFullnodeUrl('mainnet') },
 });
 const queryClient = new QueryClient();
@@ -26,7 +26,7 @@ createRoot(document.getElementById("root")!).render(
     <Toaster />
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
-        <WalletProvider autoConnect={false}>
+        <WalletProvider autoConnect={true}>
           {" "}
           {/* Set autoConnect={true} if desired */}
           <App />

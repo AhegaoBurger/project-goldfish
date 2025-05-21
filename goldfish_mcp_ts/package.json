@@ -1,0 +1,23 @@
+{
+  "name": "goldfish-mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for Goldfish decentralized storage",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node --esm src/server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.11.3",
+    "@mysten/sui": "1.28.2",
+    "@mysten/walrus": "^0.0.19",
+    "@mysten/walrus-wasm": "^0.0.6",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.2",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.7.2"
+  }
+}
