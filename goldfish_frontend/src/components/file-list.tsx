@@ -26,7 +26,7 @@ import {
 import FileOptions from "./file-options";
 import { TABLE_OBJECT_ID } from "../constants";
 import { useUserFileContents, BlobFetchResult } from "../hooks/useUserFilesIds";
-import { formatFileSize, processBlobResult } from "../lib/fileHelpers";
+import { processBlobResult } from "../lib/fileHelpers";
 import { walrusClient } from "@/hooks/useWalrus";
 
 // Define the file item type for our processed files
