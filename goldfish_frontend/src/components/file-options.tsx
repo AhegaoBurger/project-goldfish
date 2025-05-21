@@ -53,28 +53,45 @@ export default function FileOptions({
 
     setIsDownloading(true);
     try {
-      // Determine MIME type based on the file type property or try to detect it
+      // Detect file type from the first few bytes of the data
+      const fileHeader = fileData.slice(0, 4);
       let mimeType = "application/octet-stream"; // default mime type
+      let extension = "bin"; // default extension
       
-      // Extract file extension from fileName or try to detect from content
-      const fileExtension = fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() : '';
-      if (fileExtension) {
-        switch (fileExtension) {
-          case 'pdf': mimeType = 'application/pdf'; break;
-          case 'png': mimeType = 'image/png'; break;
-          case 'jpg':
-          case 'jpeg': mimeType = 'image/jpeg'; break;
-          case 'gif': mimeType = 'image/gif'; break;
-          case 'svg': mimeType = 'image/svg+xml'; break;
-          case 'mp4': mimeType = 'video/mp4'; break;
-          case 'mp3': mimeType = 'audio/mpeg'; break;
-          case 'json': mimeType = 'application/json'; break;
-          case 'txt': mimeType = 'text/plain'; break;
-          case 'doc': mimeType = 'application/msword'; break;
-          case 'docx': mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'; break;
-          case 'xls': mimeType = 'application/vnd.ms-excel'; break;
-          case 'xlsx': mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; break;
-          // Add more cases as needed
+      if (fileHeader.length >= 4) {
+        // Check for common file signatures (magic numbers)
+        if (fileHeader[0] === 0xFF && fileHeader[1] === 0xD8) {
+          mimeType = "image/jpeg";
+          extension = "jpg";
+        } else if (
+          fileHeader[0] === 0x89 && fileHeader[1] === 0x50 &&
+          fileHeader[2] === 0x4E && fileHeader[3] === 0x47
+        ) {
+          mimeType = "image/png";
+          extension = "png";
+        } else if (fileHeader[0] === 0x47 && fileHeader[1] === 0x49 && fileHeader[2] === 0x46) {
+          mimeType = "image/gif";
+          extension = "gif";
+        } else if (
+          fileHeader[0] === 0x25 && fileHeader[1] === 0x50 &&
+          fileHeader[2] === 0x44 && fileHeader[3] === 0x46
+        ) {
+          mimeType = "application/pdf";
+          extension = "pdf";
+        } else {
+          // Try to detect if it's text by checking a larger sample
+          try {
+            const textSample = new TextDecoder().decode(fileData.slice(0, 100));
+            // Only consider it text if it contains printable ASCII characters
+            if (/^[\x20-\x7E\n\r\t]*$/.test(textSample)) {
+              mimeType = "text/plain";
+              extension = "txt";
+            }
+          } catch {
+            // If decoding fails, it's likely binary data
+            mimeType = "application/octet-stream";
+            extension = "bin";
+          }
         }
       }
 
@@ -85,13 +102,12 @@ export default function FileOptions({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      // Use the original filename if it has an extension, otherwise add one based on mime type
-      if (!fileName.includes('.')) {
-        const defaultExt = mimeType.split('/')[1].split(';')[0];
-        a.download = `${fileName}.${defaultExt}`;
-      } else {
-        a.download = fileName;
-      }
+      
+      // Use the detected extension
+      const baseFileName = fileName.includes('.') 
+        ? fileName.substring(0, fileName.lastIndexOf('.'))
+        : fileName;
+      a.download = `${baseFileName}.${extension}`;
 
       // Trigger the download
       document.body.appendChild(a);
@@ -102,7 +118,7 @@ export default function FileOptions({
       document.body.removeChild(a);
 
       toast("Download Started", {
-        description: `Downloading ${fileName}`,
+        description: `Downloading ${a.download}`,
       });
     } catch (error) {
       console.error("Download error:", error);
