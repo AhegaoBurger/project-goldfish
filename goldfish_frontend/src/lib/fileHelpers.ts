@@ -73,7 +73,7 @@ export const getFileTypeFromData = (
           "java",
           "cpp",
           "c",
-          "go",
+          "go", 
           "rs",
         ].includes(extension)
       )
@@ -119,4 +119,112 @@ export const getFileTypeFromData = (
 
   // Default
   return "unknown";
+};
+
+// Detect file type and extension from binary data
+export const detectFileType = (fileData: Uint8Array): { mimeType: string; extension: string; type: string } => {
+  let mimeType = "application/octet-stream"; // default mime type
+  let extension = "bin"; // default extension
+  let type = "unknown";
+
+  // Check file header (magic numbers)
+  const fileHeader = fileData.slice(0, 4);
+  
+  if (fileHeader.length >= 4) {
+    if (fileHeader[0] === 0xFF && fileHeader[1] === 0xD8) {
+      mimeType = "image/jpeg";
+      extension = "jpg";
+      type = "image";
+    } else if (
+      fileHeader[0] === 0x89 && fileHeader[1] === 0x50 &&
+      fileHeader[2] === 0x4E && fileHeader[3] === 0x47
+    ) {
+      mimeType = "image/png";
+      extension = "png";
+      type = "image";
+    } else if (fileHeader[0] === 0x47 && fileHeader[1] === 0x49 && fileHeader[2] === 0x46) {
+      mimeType = "image/gif";
+      extension = "gif";
+      type = "image";
+    } else if (
+      fileHeader[0] === 0x25 && fileHeader[1] === 0x50 &&
+      fileHeader[2] === 0x44 && fileHeader[3] === 0x46
+    ) {
+      mimeType = "application/pdf";
+      extension = "pdf";
+      type = "pdf";
+    } else {
+      // Try to detect if it's text by checking a larger sample
+      try {
+        const textSample = new TextDecoder().decode(fileData.slice(0, 100));
+        // Only consider it text if it contains printable ASCII characters
+        if (/^[\x20-\x7E\n\r\t]*$/.test(textSample)) {
+          mimeType = "text/plain";
+          extension = "txt";
+          type = "text";
+        }
+      } catch {
+        // If decoding fails, it's likely binary data
+        mimeType = "application/octet-stream";
+        extension = "bin";
+        type = "unknown";
+      }
+    }
+  }
+
+  return { mimeType, extension, type };
+};
+
+// Process a blob result into a FileItem
+export const processBlobResult = async (
+  blobResult: { blobId: string; error?: string; data: Uint8Array | null },
+  walrusClient: any
+) => {
+  if (blobResult.error || !blobResult.data) {
+    return {
+      id: blobResult.blobId,
+      objectId: "",
+      name: `File (${blobResult.blobId.substring(0, 8)}...)`,
+      extension: "",
+      type: "unknown",
+      size: "Unknown",
+      lastModified: "Unknown",
+      storageEpochs: 0,
+      isDeletable: false,
+      data: null,
+      error: blobResult.error || "Failed to load file data",
+    };
+  }
+
+  // Get metadata for the blob
+  let metadata;
+  try {
+    metadata = await walrusClient.getBlobMetadata({
+      blobId: blobResult.blobId,
+    });
+    console.log("File metadata:", metadata);
+  } catch (metadataError) {
+    console.error("Error getting blob metadata:", metadataError);
+    metadata = null;
+  }
+
+  // Detect file type and extension
+  const { extension, type } = detectFileType(blobResult.data);
+  const fileName = `File-${blobResult.blobId.substring(0, 8)}.${extension}`;
+
+  // Get file size
+  const fileSize = formatFileSize(blobResult.data.byteLength);
+
+  return {
+    id: blobResult.blobId,
+    objectId: "",
+    name: fileName,
+    extension,
+    type,
+    size: fileSize,
+    lastModified: "Recently uploaded",
+    storageEpochs: 1,
+    isDeletable: true,
+    data: blobResult.data,
+  };
 };
