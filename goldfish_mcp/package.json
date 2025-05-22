@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "description": "Model Context Protocol server for Goldfish decentralized storage",
   "type": "module",
+  "bin": {
+    "goldfish-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc && chmod 755 dist/index.js",
     "prepare": "npm run build",

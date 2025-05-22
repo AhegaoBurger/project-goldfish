@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { Server as McpServerRaw } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -80,8 +82,8 @@ const server = new McpServerRaw(
   },
   {
     capabilities: {
-      resources: { listChanged: false, subscribe: false }, // Enable resource capabilities
-      tools: { listChanged: false },
+      resources: {}, // Enable resource capabilities
+      tools: {},
     },
   },
 );
