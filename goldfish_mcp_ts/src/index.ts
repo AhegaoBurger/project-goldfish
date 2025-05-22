@@ -10,8 +10,6 @@ import {
   ResourceContents as McpResourceContent,
   CallToolResult,
   TextContent,
-  // Make sure these types are correctly imported or defined if not directly from SDK
-  // ListResourcesResult, ReadResourceResult, ListToolsResult,
 } from "@modelcontextprotocol/sdk/types.js";
 
 import {
@@ -23,6 +21,14 @@ import { Transaction } from "@mysten/sui/transactions"; // Corrected import
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { WalrusClient, BlobNotCertifiedError } from "@mysten/walrus";
 import { Buffer } from "node:buffer";
+import { detectFileType } from "./utils/fileType.js";
+import {
+  SYSTEM_OBJECT_ID,
+  STAKING_POOL_ID,
+  SUBSIDIES_OBJECT_ID,
+  EXCHANGGE_IDS,
+} from "./constants.js";
+// import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url"; // Vite specific import
 
 // --- Configuration Interface ---
 interface GoldfishConfig {
@@ -57,6 +63,12 @@ const walrusClient = new WalrusClient({
   storageNodeClientOptions: {
     timeout: 60_000,
     onError: (error) => console.error("Walrus Node Error:", error),
+  },
+  packageConfig: {
+    systemObjectId: SYSTEM_OBJECT_ID,
+    stakingPoolId: STAKING_POOL_ID,
+    subsidiesObjectId: SUBSIDIES_OBJECT_ID,
+    exchangeIds: EXCHANGGE_IDS,
   },
 });
 
@@ -232,26 +244,30 @@ server.setRequestHandler(
       } as McpResourceContent);
       console.error(`[Resources/Read] Fetched metadata successfully.`);
 
-      // 2. Fetch Content
+      // 2. Fetch Content and detect mime type
       console.error(`[Resources/Read] Fetching content for blob: ${blobId}`);
       const contentBytes = await walrusClient.readBlob({ blobId });
       console.error(
         `[Resources/Read] Fetched content successfully (${contentBytes.byteLength} bytes).`,
       );
+
+      // Detect file type from content
+      const { mimeType, type } = detectFileType(new Uint8Array(contentBytes));
+
       try {
         const textContent = new TextDecoder("utf-8", { fatal: true }).decode(
           contentBytes,
         );
         contents.push({
-          uri: `${GOLDFISH_URI_SCHEME}://blob/${blobId}?type=content`, // Specific URI for content part
-          mimeType: metadata.mimeType || "text/plain", // Use metadata mime if available
+          uri: `${GOLDFISH_URI_SCHEME}://blob/${blobId}?type=content`,
+          mimeType: mimeType, // Use detected mime type
           text: textContent,
         } as McpResourceContent);
       } catch (e) {
         // Not valid UTF-8, treat as binary
         contents.push({
           uri: `${GOLDFISH_URI_SCHEME}://blob/${blobId}?type=content`,
-          mimeType: metadata.mimeType || "application/octet-stream",
+          mimeType: mimeType, // Use detected mime type
           blob: Buffer.from(contentBytes).toString("base64"),
         } as McpResourceContent);
       }

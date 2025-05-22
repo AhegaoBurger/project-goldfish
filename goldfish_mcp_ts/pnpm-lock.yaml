@@ -12,11 +12,11 @@ importers:
         specifier: 1.11.3
         version: 1.11.3
       '@mysten/sui':
-        specifier: 1.28.2
-        version: 1.28.2(typescript@5.7.3)
+        specifier: ^1.30.0
+        version: 1.30.0(typescript@5.7.3)
       '@mysten/walrus':
-        specifier: ^0.0.19
-        version: 0.0.19(typescript@5.7.3)
+        specifier: ^0.1.0
+        version: 0.1.0(typescript@5.7.3)
       '@mysten/walrus-wasm':
         specifier: ^0.0.6
         version: 0.0.6
@@ -93,11 +93,11 @@ packages:
     resolution: {integrity: sha512-rmOWVRUbUJD7iSvJugjUbFZshTAuJ48MXoZ80Osx1GM0K/H1w7rSEvmw8m6vdWxNASgtaHIhAgre4H/E9GJiYQ==}
     engines: {node: '>=18'}
 
-  '@mysten/bcs@1.6.0':
-    resolution: {integrity: sha512-ydDRYdIkIFCpHCcPvAkMC91fVwumjzbTgjqds0KsphDQI3jUlH3jFG5lfYNTmV6V3pkhOiRk1fupLBcsQsiszg==}
+  '@mysten/bcs@1.6.1':
+    resolution: {integrity: sha512-pywsl2+jxbib5CbteAjMpmJpnj1pcUco2ff+lXCK3hfppPbkyWEMbZDQn1jNngV6ADQ3IFIvPs0FaS7fKWPOLA==}
 
-  '@mysten/sui@1.28.2':
-    resolution: {integrity: sha512-d+lSp3rAtuOX0taIiIv0KNILDsbmAB9koNGHBinfREraGnE9tUFW315UByuyvuZ9K53ji4i2risdtwxCQ1a8Zw==}
+  '@mysten/sui@1.30.0':
+    resolution: {integrity: sha512-mVEq3HQQTqw/ieiyoNbg7WDieFzUuBIKaTBvJaPKMOmjhrQutZiqJWXyHt8V+8iLEeAzhRg83eae8eHDOhklsQ==}
     engines: {node: '>=18'}
 
   '@mysten/utils@0.0.0':
@@ -106,8 +106,8 @@ packages:
   '@mysten/walrus-wasm@0.0.6':
     resolution: {integrity: sha512-rqXopgWqALp8jdVaHeW64P5I7MmzEGy8gCFbfzK8xGgWGpSjKtvVeHJ9EguRVOxALaYtDBVlmMPnoySJi+bLjA==}
 
-  '@mysten/walrus@0.0.19':
-    resolution: {integrity: sha512-xcN7tgz9fUdbjxz5e3/TIz9eZxJLfJxjZlQejYP5MdiD6jqM5Gr0nM6af1IF9gBRpx6N3IHmw0U29M+11oMm8Q==}
+  '@mysten/walrus@0.1.0':
+    resolution: {integrity: sha512-ipkzCnaHmMkBlXN7jw4asr6VnYlsNVnNYWfuYVaktzrXbZOmUeuHLa55slqF9et0YR71fJsXb2A/7R/LNq5RIQ==}
 
   '@noble/curves@1.9.1':
     resolution: {integrity: sha512-k11yZxZg+t+gWvBbIswW0yoJlu8cHOC7dhunwOzoWH/mXGBiYyR4YY6hAEK/3EUs4UpB8la1RfdRpeGsFHkWsA==}
@@ -584,14 +584,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@mysten/bcs@1.6.0':
+  '@mysten/bcs@1.6.1':
     dependencies:
+      '@mysten/utils': 0.0.0
       '@scure/base': 1.2.5
 
-  '@mysten/sui@1.28.2(typescript@5.7.3)':
+  '@mysten/sui@1.30.0(typescript@5.7.3)':
     dependencies:
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.11.0)
-      '@mysten/bcs': 1.6.0
+      '@mysten/bcs': 1.6.1
       '@mysten/utils': 0.0.0
       '@noble/curves': 1.9.1
       '@noble/hashes': 1.8.0
@@ -613,10 +614,10 @@ snapshots:
 
   '@mysten/walrus-wasm@0.0.6': {}
 
-  '@mysten/walrus@0.0.19(typescript@5.7.3)':
+  '@mysten/walrus@0.1.0(typescript@5.7.3)':
     dependencies:
-      '@mysten/bcs': 1.6.0
-      '@mysten/sui': 1.28.2(typescript@5.7.3)
+      '@mysten/bcs': 1.6.1
+      '@mysten/sui': 1.30.0(typescript@5.7.3)
       '@mysten/utils': 0.0.0
       '@mysten/walrus-wasm': 0.0.6
       dataloader: 2.2.3
