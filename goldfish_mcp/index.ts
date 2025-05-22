@@ -329,10 +329,21 @@ const UPLOAD_FILE_TOOL_DEF: Tool = {
   },
 };
 
+const LIST_GOLDFISH_FILES_TOOL_DEF: Tool = {
+  name: "list_goldfish_files",
+  description: "Lists all files stored in Goldfish for the configured wallet address. This operation can take a minute or more to complete. Provides progress updates.",
+  inputSchema: { // You might not need any input, or perhaps filters later
+    type: "object",
+    properties: {}, // e.g., filter_by_name: { type: "string" }
+  },
+  // Optional: outputSchema if you want to return a structured list of file objects
+};
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       UPLOAD_FILE_TOOL_DEF /*, Add UPLOAD_FILES_TOOL_DEF if implemented */,
+      LIST_GOLDFISH_FILES_TOOL_DEF, // Add the new tool
     ],
   };
 });
@@ -530,6 +541,137 @@ server.setRequestHandler(
         isError: true,
       };
     }
+  },
+);
+
+server.setRequestHandler(
+  CallToolRequestSchema,
+  async (request): Promise<CallToolResult> => {
+    const { name, arguments: args, _meta } = request.params; // _meta might contain progressToken
+    const progressToken = _meta?.progressToken;
+
+    // ... other tool cases ...
+
+    if (name === LIST_GOLDFISH_FILES_TOOL_DEF.name) {
+      console.error(`[Tool/${name}] Called.`);
+      // Ensure config is initialized
+      if (!config) {
+          const errMsg = "[Tool/list_goldfish_files] Error: Server configuration not initialized.";
+          console.error(errMsg);
+          return { content: [{ type: "text", text: errMsg }], isError: true };
+      }
+
+      // 1. Send initial progress if token exists
+      if (progressToken) {
+        // Correct way to send a notification:
+        await server.notification({ // Use the generic 'notification' method
+          method: "notifications/progress", // MCP standard method name for progress
+          params: {
+            progressToken,
+            progress: 0,
+            message: "Starting to fetch Goldfish file list from Sui...",
+          }
+        });
+      }
+
+      try {
+        // --- THIS IS THE SAME LOGIC AS YOUR ListResourcesRequestSchema HANDLER ---
+        const userBlobIds: string[] = [];
+        let hasNextPage = true;
+        let cursor: string | null = null;
+        let itemsFetched = 0;
+        // let totalItemsToFetch = undefined; // If you can estimate total, set it for progress
+
+        while (hasNextPage) {
+          const dynamicFieldsResponse = await suiClient.getDynamicFields({
+            parentId: TABLE_OBJECT_ID,
+            cursor: cursor,
+            limit: 50,
+          });
+          itemsFetched += dynamicFieldsResponse.data.length;
+
+          if (progressToken) {
+            await server.notification({
+              method: "notifications/progress",
+              params: {
+                progressToken,
+                progress: itemsFetched,
+                message: `Fetched ${itemsFetched} field infos... processing...`,
+              }
+            });
+          }
+
+          for (const fieldInfo of dynamicFieldsResponse.data) {
+            if (
+              typeof fieldInfo.name.value === "string" &&
+              fieldInfo.name.value.toLowerCase() === config.walletAddress.toLowerCase()
+            ) {
+              const fieldObjectResponse = await suiClient.getDynamicFieldObject({
+                parentId: TABLE_OBJECT_ID,
+                name: fieldInfo.name,
+              });
+              if (fieldObjectResponse.data?.content?.dataType === "moveObject") {
+                const fieldsData = fieldObjectResponse.data.content.fields as { value: string[] };
+                if (Array.isArray(fieldsData.value)) {
+                  userBlobIds.push(...fieldsData.value);
+                }
+              }
+            }
+          }
+          cursor = dynamicFieldsResponse.nextCursor;
+          hasNextPage = dynamicFieldsResponse.hasNextPage;
+        }
+        // --- END OF COPIED LOGIC ---
+
+        if (progressToken) {
+          await server.notification({
+            method: "notifications/progress",
+            params: {
+              progressToken,
+              progress: itemsFetched, // Or a final value like 100 if it's a percentage
+              message: "File list retrieval complete. Formatting results...",
+            }
+          });
+        }
+
+        if (userBlobIds.length === 0) {
+          return {
+            content: [{ type: "text", text: "No files found in Goldfish for your wallet." }],
+          };
+        }
+
+        const fileDescriptions = userBlobIds.map((blobId, index) =>
+          `File ${index + 1}: Blob ID - ${blobId.substring(0,12)}... (URI: ${GOLDFISH_URI_SCHEME}://blob/${blobId})`
+        ).join("\n");
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Found ${userBlobIds.length} files:\n${fileDescriptions}\n\nYou can ask to read a specific file using its URI.`,
+            },
+          ],
+        };
+      } catch (error) {
+        console.error(`[Tool/${name}] Error:`, error);
+        if (progressToken) {
+          await server.notification({ // Also send progress on error if applicable
+            method: "notifications/progress",
+            params: {
+              progressToken,
+              // You might not have a 'progress' value here, or it might be the last known
+              message: `Error fetching file list: ${error instanceof Error ? error.message : String(error)}`,
+            }
+          });
+        }
+        return {
+          content: [ { type: "text", text: `Failed to list Goldfish files: ${error instanceof Error ? error.message : String(error)}` }],
+          isError: true,
+        };
+      }
+    }
+    // ... handle other tools or return unknown tool error
+    return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
   },
 );
 
