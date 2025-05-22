@@ -21,13 +21,13 @@ import { Transaction } from "@mysten/sui/transactions"; // Corrected import
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { WalrusClient, BlobNotCertifiedError } from "@mysten/walrus";
 import { Buffer } from "node:buffer";
-import { detectFileType } from "./utils/fileType.js";
+import { detectFileType } from "./src/utils/fileType.js";
 import {
   SYSTEM_OBJECT_ID,
   STAKING_POOL_ID,
   SUBSIDIES_OBJECT_ID,
   EXCHANGGE_IDS,
-} from "./constants.js";
+} from "./src/constants.js";
 // import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url"; // Vite specific import
 
 // --- Configuration Interface ---
