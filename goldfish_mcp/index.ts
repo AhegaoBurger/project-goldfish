@@ -50,7 +50,7 @@ const NETWORK = "testnet";
 const GOLDFISH_URI_SCHEME = "goldfish";
 
 let config: GoldfishConfig;
-let serverKeypair: Ed25519Keypair | undefined;
+let serverKeypair: Ed25519Keypair | undefined; // Initialize as undefined
 
 // --- Client Initializations ---
 const suiClient = new SuiClient({
@@ -82,8 +82,8 @@ const server = new McpServerRaw(
   },
   {
     capabilities: {
-      resources: {}, // Enable resource capabilities
-      tools: {},
+      resources: { listChanged: false, subscribe: false }, // Enable resource capabilities
+      tools: { listChanged: false },
     },
   },
 );
@@ -92,7 +92,7 @@ const server = new McpServerRaw(
 async function executeSuiTransaction(transaction: Transaction) {
   if (!serverKeypair) {
     throw new Error(
-      "Server private key not configured. Cannot sign Sui transactions.",
+      "Server private key not configured or invalid. Cannot sign Sui transactions.",
     );
   }
   transaction.setSender(config.walletAddress); // Ensure sender is set
@@ -117,6 +117,11 @@ server.setRequestHandler(
   async (
     request,
   ): Promise<{ resources: McpResource[]; nextCursor?: string }> => {
+    // Ensure config is initialized
+    if (!config) {
+        console.error("[Resources/List] Error: Server configuration not initialized.");
+        return { resources: [] };
+    }
     console.error(`[Resources/List] For wallet: ${config.walletAddress}`);
     const userBlobIds: string[] = [];
 
@@ -344,13 +349,23 @@ server.setRequestHandler(
 
     if (!serverKeypair) {
       const errMsg =
-        "Server private key not configured. Cannot execute tools requiring Sui transactions.";
+        "Server private key not configured or invalid. Cannot execute tools requiring Sui transactions.";
       console.error(`[Tool/${name}] Error: ${errMsg}`);
       return {
         content: [{ type: "text", text: errMsg } as TextContent],
         isError: true,
       };
     }
+    // Ensure config is initialized before accessing config.walletAddress
+    if (!config) {
+        const errMsg = "Server configuration not initialized. Cannot determine wallet address for tool execution.";
+        console.error(`[Tool/${name}] Error: ${errMsg}`);
+        return {
+            content: [{ type: "text", text: errMsg } as TextContent],
+            isError: true,
+        };
+    }
+
 
     try {
       switch (name) {
@@ -523,7 +538,7 @@ async function main() {
   const walletAddressFromEnv = process.env.GOLDFISH_WALLET_ADDRESS;
   const privateKeyHexFromEnv = process.env.GOLDFISH_SERVER_PRIVATE_KEY_HEX;
   const walletAddressFromArg = process.argv[2];
-  const privateKeyHexFromArg = process.argv[3]; // Assuming pk is the second arg
+  const privateKeyHexFromArg = process.argv[3];
 
   const walletAddress = walletAddressFromEnv || walletAddressFromArg;
   const serverPkHex = privateKeyHexFromEnv || privateKeyHexFromArg;
@@ -532,47 +547,55 @@ async function main() {
     console.error(
       "Error: Goldfish wallet address not configured. Set GOLDFISH_WALLET_ADDRESS or pass as 1st cmd arg.",
     );
-    process.exit(1);
+    process.exit(1); // Wallet address is mandatory for the server to function.
   }
+
+  // Initialize global config with walletAddress. serverPrivateKeyHex is optional.
+  config = { walletAddress, serverPrivateKeyHex: serverPkHex };
+  console.error(
+    `Goldfish MCP Server starting for wallet: ${config.walletAddress}`,
+  );
+
+  // Attempt to initialize serverKeypair if private key is provided
   if (!serverPkHex) {
     console.warn(
       "Warning: GOLDFISH_SERVER_PRIVATE_KEY_HEX not configured. Tools requiring Sui transactions will fail.",
     );
-    // Not exiting, but tools will fail if they need to sign.
+    serverKeypair = undefined; // Ensure it's undefined
   } else {
     try {
-      serverKeypair = Ed25519Keypair.fromSecretKey(
+      const keypairCandidate = Ed25519Keypair.fromSecretKey(
         Buffer.from(serverPkHex, "hex"),
       );
-      if (serverKeypair.getPublicKey().toSuiAddress() !== walletAddress) {
+      // Validate that the derived public key matches the configured wallet address
+      if (keypairCandidate.getPublicKey().toSuiAddress() !== walletAddress) {
         console.warn(
-          `Warning: Configured server private key does not match GOLDFISH_WALLET_ADDRESS. Expected ${walletAddress}, got ${serverKeypair.getPublicKey().toSuiAddress()}. Sui transactions may fail or use the wrong sender.`,
+          `Warning: Configured server private key (GOLDFISH_SERVER_PRIVATE_KEY_HEX) does not match the configured GOLDFISH_WALLET_ADDRESS. Expected ${walletAddress}, but key corresponds to ${keypairCandidate.getPublicKey().toSuiAddress()}. Tools requiring Sui transactions for the configured wallet will fail or act on behalf of the wrong address.`,
         );
-        // You might want to exit(1) here if this is a critical mismatch
+        serverKeypair = undefined; // Treat as if no valid key for the *configured wallet* was provided
       } else {
+        serverKeypair = keypairCandidate; // Key is valid and matches the walletAddress
         console.error(
           `Server keypair loaded successfully for address: ${serverKeypair.getPublicKey().toSuiAddress()}`,
         );
       }
     } catch (e) {
-      console.error(
-        "Error loading server private key. Ensure it's a valid hex string.",
-        e,
+      // This catch block handles errors from Buffer.from or Ed25519Keypair.fromSecretKey (e.g. invalid hex, wrong length)
+      console.warn( // Changed from console.error to console.warn to prevent exit
+        `Warning: GOLDFISH_SERVER_PRIVATE_KEY_HEX provided is invalid or malformed. Tools requiring Sui transactions will fail. Error details: ${e instanceof Error ? e.message : String(e)}`,
       );
-      process.exit(1);
+      serverKeypair = undefined; // Ensure it's undefined on error
+      // We DO NOT process.exit(1) here, allowing the server to continue for non-signing operations.
     }
   }
 
-  config = { walletAddress, serverPrivateKeyHex: serverPkHex };
-  console.error(
-    `Goldfish MCP Server starting for wallet: ${config.walletAddress}`,
-  );
 
   try {
     const blobType = await walrusClient.getBlobType();
     console.error("Successfully connected to Walrus, blob type:", blobType);
   } catch (e) {
     console.error("Failed to connect to Walrus on startup:", e);
+    // Consider if this should be a fatal error depending on server requirements
   }
 
   const transport = new StdioServerTransport();
