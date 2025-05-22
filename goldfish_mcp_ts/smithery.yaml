@@ -1,0 +1,29 @@
+# Smithery configuration file: https://smithery.ai/docs/build/project-config
+
+startCommand:
+  type: stdio
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => {
+      const env = { GOLDFISH_WALLET_ADDRESS: config.walletAddress };
+      if (config.serverPrivateKeyHex) env.GOLDFISH_SERVER_PRIVATE_KEY_HEX = config.serverPrivateKeyHex;
+      return { command: 'node', args: ['dist/index.js'], env };
+    }
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - walletAddress
+    properties:
+      walletAddress:
+        type: string
+        description: The Sui address of the server wallet
+      serverPrivateKeyHex:
+        type: string
+        description: Hex-encoded private key for signing Sui transactions (optional)
+      unused:
+        type: "null"
+  exampleConfig:
+    walletAddress: "0x1234567890abcdef1234567890abcdef12345678"
+    serverPrivateKeyHex: abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
